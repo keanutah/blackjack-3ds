@@ -460,7 +460,7 @@ while true do
 			nextState = 'playerBet'
 		end
 
-		if (menuResponse == 'options') or buttonPressed(KEY_SELECT) then
+		if (menuResponse == 'options') or buttonPressed(KEY_X) then
 			nextState = 'options'
 		end
 
