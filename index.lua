@@ -1,23 +1,33 @@
 white = Color.new(255,255,255)
+black = Color.new(0,0,0)
+background = Color.new(7,99,36)
+buttonFill = Color.new(9,86,32)
+buttonText = Color.new(200,200,200)
 
 Screen.waitVblankStart()
 Screen.refresh()
 Screen.debugPrint(5,5,'Loading...', white, TOP_SCREEN)
 Screen.flip()
 
-background = Color.new(7,99,36)
-
 h,m,s = System.getTime()
 seed = s + m * 60 + h * 3600
 math.randomseed (seed)
 
 oldPad = Controls.read()
+oldX, oldY = Controls.readTouch()
 
 cardSprites = Screen.loadImage(System.currentDirectory().."/images/cardsprites.png")
 cardSpritesDim = Screen.loadImage(System.currentDirectory().."/images/cardspritesdim.png")
 cardBack = Screen.loadImage(System.currentDirectory().."/images/cardback.png")
 
-bgm = Sound.openOgg((System.currentDirectory().."/sound/bgm.ogg"), false)
+aButton = Screen.loadImage(System.currentDirectory().."/images/a.png")
+bButton = Screen.loadImage(System.currentDirectory().."/images/b.png")
+xButton = Screen.loadImage(System.currentDirectory().."/images/x.png")
+yButton = Screen.loadImage(System.currentDirectory().."/images/y.png")
+rButton = Screen.loadImage(System.currentDirectory().."/images/r.png")
+startButton = Screen.loadImage(System.currentDirectory().."/images/start.png")
+
+-- bgm = Sound.openOgg((System.currentDirectory().."/sound/bgm.ogg"), false)
 
 suiteYIndices = { s=0, c=98, h=196, d=294 }
 suiteXIndices = { ['A']=0, [2]=73, [3]=(73*2), [4]=(73*3), [5]=(73*4), [6]=(73*5), [7]=(73*6), [8]=(73*7), [9]=(73*8), [10]=(73*9), ['J']=(73*10), ['Q']=(73*11), ['K']=(73*12) }
@@ -27,7 +37,6 @@ suites = {'c','d','s','h'}
 
 playerMoney = 1000
 
-deck = nil
 dealerHand = nil
 playerHands = {}
 playerHandIndex = 1
@@ -43,6 +52,7 @@ dealerAnimationCounter = 0
 fullLengthCardSpacing = 75
 singleHandCollapseCardSpacing = 35
 splitHandCardSpacing = 20
+
 
 --- Basic Functions --------------------------------------------------------------------------
 
@@ -180,6 +190,27 @@ function moneyWagered ()
 	return wagered
 end
 
+function withinCoords (x, y, x1, x2, y1, y2)
+	if (y >= y1) and (y <= y2) then
+		if (x >= x1) and (x <= x2) then
+			return true
+		end
+	end
+	return false
+end
+
+function menuTrigger (x, y, x1, x2, y1, y2, returnString) 
+	if withinCoords(x, y, x1, x2, y1, y2) and not _G[returnString..'Trigger'] then
+		_G[returnString..'Trigger'] = true
+	end
+	if not withinCoords(x, y, x1, x2, y1, y2) and _G[returnString..'Trigger'] then
+		_G[returnString..'Trigger'] = false
+		return returnString
+	end
+	return false
+end
+
+
 ------------------------------------------------------------------------------------
 
 function newHand (initialCards, bet)
@@ -253,29 +284,199 @@ end
 
 ---------------------------------------------------------------------------
 
-Sound.init()
-Sound.play(bgm,LOOP,0x08,0x09) 
+function drawAndCheckMenu ()
+	if currentState == 'menu' then
+		Screen.fillRect(5,314, 25, 85, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
+		Screen.debugPrint(118,50, "New Hand", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'newHand') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(5,314, 90, 150, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,93, xButton, BOTTOM_SCREEN)
+		Screen.debugPrint(128,115, "Options", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'options') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(5,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,158, startButton, BOTTOM_SCREEN)
+		Screen.debugPrint(142,180, "Exit", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'exit') or trigger
+		if trigger then return trigger end
+
+	elseif currentState == 'options' then
+		Screen.fillRect(5,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,158, bButton, BOTTOM_SCREEN)
+		Screen.debugPrint(142,180, "Back", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
+		if trigger then return trigger end
+
+	elseif currentState == 'offerInsurance' then
+		Screen.fillRect(5,314, 25, 85, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
+		Screen.debugPrint(80,50, "Decline Insurance", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'skipInsurance') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(5,314, 90, 150, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,93, xButton, BOTTOM_SCREEN)
+		Screen.debugPrint(70,115, "Buy Insurance ($"..math.floor(playerBet / 2.0)..")", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'buyInsurance') or trigger
+		if trigger then return trigger end
+
+	elseif currentState == 'playerTurn' then
+		Screen.fillRect(5,314, 25, 85, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
+		Screen.debugPrint(147,50, "Hit", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'hit') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(5,314, 90, 150, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,93, bButton, BOTTOM_SCREEN)
+		Screen.debugPrint(135,115, "Stand", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'stand') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(5,105, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,105, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,158, xButton, BOTTOM_SCREEN)
+		Screen.debugPrint(27,180, "Double", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 105, 155, 215, 'double') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(109,210, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(109,210, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(112,158, yButton, BOTTOM_SCREEN)
+		Screen.debugPrint(114,180, "Surrender", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 109, 210, 155, 215, 'surrender') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(214,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(214,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(217,158, rButton, BOTTOM_SCREEN)
+		Screen.debugPrint(243,180, "Split", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 155, 215, 'split') or trigger
+		if trigger then return trigger end
+
+	elseif currentState == 'gameOver' then
+		Screen.fillRect(5,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,158, xButton, BOTTOM_SCREEN)
+		Screen.debugPrint(100,180, "New Game", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'restart') or trigger
+		if trigger then return trigger end
+
+	end
+	-- Screen.drawLine(159,159,0,239, white, BOTTOM_SCREEN)
+	-- Screen.drawLine(160,160,0,239, white, BOTTOM_SCREEN)
+	return nil
+end
+
+
+
+---------------------------------------------------------------------------
+
+-- Sound.init()
+-- Sound.play(bgm,LOOP,0x08,0x09)
+
+fileStream = io.open(System.currentDirectory().."/money.file",FREAD)
+fileMoney = io.read(fileStream,0,10)
+io.close(fileStream)
+
+if tonumber(fileMoney) == nil then
+	fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
+	local size = string.len(tostring(playerMoney))
+	io.write(fileStream,0,'0000000000', 10)
+	io.write(fileStream,10-size,playerMoney, size) 
+	io.close(fileStream)
+else
+	playerMoney = tonumber(fileMoney)
+end
+
+moneyWriten = false
+
+deck = getFreshDeck()
 
 ---------------------------------------------------------------------------
 
 while true do
 	Screen.waitVblankStart()
 	pad = Controls.read()
+	xTouch, yTouch = Controls.readTouch()
 	Screen.refresh()
 	Screen.clear(TOP_SCREEN)
 	Screen.clear(BOTTOM_SCREEN)
 	
 	Screen.fillRect(0, 399, 0, 239, background, TOP_SCREEN)
 	Screen.fillRect(0, 319, 0, 239, background, BOTTOM_SCREEN)
+
+	menuResponse = drawAndCheckMenu()
+
+	Screen.debugPrint(150,225, "Blackjack 3DS v0.1", white, BOTTOM_SCREEN)
+	-- Screen.debugPrint(5,225, "d:"..fileMoney, white, BOTTOM_SCREEN)
 	
 	if (currentState == 'menu') then
-		Screen.debugPrint(5,5, "Cash: $"..playerMoney, white, BOTTOM_SCREEN)
-		Screen.debugPrint(5,25, "A to deal hand", white, BOTTOM_SCREEN)
-		if (buttonPressed(KEY_A)) then
+
+		if moneyWriten == false then
+			fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
+			local size = string.len(tostring(playerMoney))
+			io.write(fileStream,0,'0000000000', 10)
+			io.write(fileStream,10-size,playerMoney, size) 
+			io.close(fileStream)
+			moneyWriten = true
+		end
+
+
+		if dealerHand then
+			if (playerMoney > oldPlayerMoney) then
+				Screen.debugPrint(5,5, "Cash: $"..playerMoney.." (+"..(playerMoney - oldPlayerMoney)..")", white, BOTTOM_SCREEN)
+			else
+				Screen.debugPrint(5,5, "Cash: $"..playerMoney.." ("..(playerMoney - oldPlayerMoney)..")", white, BOTTOM_SCREEN)
+			end
+			-- Screen.debugPrint(5,25, table.concat(roundResults), white, BOTTOM_SCREEN)
+			renderDealerPlayerLine()
+			dealerHandValue = dealerHand.getValue()
+			Screen.debugPrint(10,5,"Dealer: "..dealerHandValue,white,TOP_SCREEN)
+			dealerHandRenderer(13, 17)
+			for key, value in pairs(playerHands) do
+				Screen.debugPrint(10+(200*(key-1)),126,value.getValue()..": $"..value.getBet().." ("..value.getResult()..")",white,TOP_SCREEN)
+				playerHandRenderer(13+(200*(key-1)), 138, value)
+			end
+
+		else
+			Screen.debugPrint(5,5, "Cash: $"..playerMoney, white, BOTTOM_SCREEN)
+		end
+
+
+		if ((menuResponse == 'newHand') or buttonPressed(KEY_A)) and (playerMoney >= playerBet) then
 			nextState = 'playerBet'
+		end
+
+		if (menuResponse == 'options') or buttonPressed(KEY_SELECT) then
+			nextState = 'options'
+		end
+
+		if (menuResponse == 'exit') or buttonPressed(KEY_START) then
+			Sound.term()
+			System.exit()
 		end
 		
 	elseif (currentState == 'options') then
+		Screen.debugPrint(5,5, "Options", white, BOTTOM_SCREEN)
+
+		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
+
+		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
+			nextState = 'menu'
+		end
 		
 	elseif (currentState == 'playerBet') then
 		Screen.debugPrint(5,5, "Cash: $"..playerMoney, white, BOTTOM_SCREEN)
@@ -302,7 +503,7 @@ while true do
 
 		roundResults = {}
 		
-		if (dealerHand.getCards()[1][1] == 'A') then
+		if (dealerHand.getCards()[1][1] == 'A') and ((playerMoney - (playerBet / 2.0)) > 0) then
 			nextState = 'offerInsurance'
 		elseif (playerHands[1].handStatus() == 'blackjack') then
 			nextState = 'dealerTurn'
@@ -322,8 +523,8 @@ while true do
 		Screen.debugPrint(10,126,playerHandValue..": $"..playerHands[1].getBet(),white,TOP_SCREEN)
 		playerHandRenderer(13, 138, playerHands[1])
 
-		Screen.debugPrint(5,45, "X to buy insurance for $"..math.floor(playerBet / 2.0), white, BOTTOM_SCREEN)
-		if (buttonPressed(KEY_X)) then
+		-- Screen.debugPrint(5,45, "X to buy insurance for $"..math.floor(playerBet / 2.0), white, BOTTOM_SCREEN)
+		if (menuResponse == 'buyInsurance') or buttonPressed(KEY_X) then
 			playerHasInsurance = true
 			if (playerHands[1].handStatus() == 'blackjack') then
 				nextState = 'dealerTurn'
@@ -332,8 +533,8 @@ while true do
 			end
 		end
 
-		Screen.debugPrint(5,25, "A to continue", white, BOTTOM_SCREEN)
-		if (buttonPressed(KEY_A)) then
+		-- Screen.debugPrint(5,25, "A to continue", white, BOTTOM_SCREEN)
+		if (menuResponse == 'skipInsurance') or buttonPressed(KEY_A) then
 			if (playerHands[1].handStatus() == 'blackjack') then
 				nextState = 'dealerTurn'
 			else
@@ -373,9 +574,6 @@ while true do
 			end
 		end
 
-
-
-
 		local currentHand = playerHands[playerHandIndex]
 		local playerHandValue = currentHand.getValue()
 		
@@ -387,47 +585,54 @@ while true do
 			end
 		end
 		
-		Screen.debugPrint(5,25, "A to hit", white, BOTTOM_SCREEN)
-		Screen.debugPrint(5,45, "B to stand", white, BOTTOM_SCREEN)
+		-- Screen.debugPrint(5,25, "A to hit", white, BOTTOM_SCREEN)
+		-- Screen.debugPrint(5,45, "B to stand", white, BOTTOM_SCREEN)
 
 
-		if (buttonPressed(KEY_B)) then
+		if (menuResponse == 'stand') or buttonPressed(KEY_B) then
 			if (playerHandIndex == 1) and splitActive() then -- split active
 				playerHandIndex = 2
 			else
 				nextState = 'dealerTurn'
 			end
-		elseif (buttonPressed(KEY_A)) then
+		elseif (menuResponse == 'hit') or buttonPressed(KEY_A) then
 			currentHand.dealCard()
 		end
 
-		if (currentHand.getSize() == 2) and (currentHand.getDoubledDown() == false) then
-			Screen.debugPrint(5,85, "X to double down", white, BOTTOM_SCREEN)
-			if (buttonPressed(KEY_X)) then
+		if (currentHand.getSize() == 2) and (currentHand.getDoubledDown() == false) and ((playerMoney - playerBet) > 0) then
+			-- Screen.debugPrint(5,85, "X to double down", white, BOTTOM_SCREEN)
+			if (menuResponse == 'double') or buttonPressed(KEY_X) then
 				currentHand.doubleDown()
 			end
+		else
+			Screen.fillRect(5,105, 155, 215, background, BOTTOM_SCREEN )
 		end
 
-		if not(splitActive()) and (currentHand.canSplit() == true) and (currentHand.getDoubledDown() == false) then 
-			Screen.debugPrint(5,105, "R to split", white, BOTTOM_SCREEN)
-			if (buttonPressed(KEY_R)) then
+		if not(splitActive()) and (currentHand.canSplit() == true) and (currentHand.getDoubledDown() == false) and ((playerMoney - playerBet) > 0) then 
+			-- Screen.debugPrint(5,105, "R to split", white, BOTTOM_SCREEN)
+			if (menuResponse == 'split') or buttonPressed(KEY_R) then
 				local cards = playerHands[1].getCards()
 				local bet = playerHands[1].getBet()
 				playerHands = { newHand({cards[1]}, bet), newHand({cards[2]}, bet) }
 				playerHands[1].dealCard()
 				playerHands[2].dealCard()
 			end
+		else -- hide button
+			Screen.fillRect(214,314, 155, 215, background, BOTTOM_SCREEN )
 		end
 
 		if (getTableSize(playerHands) == 1) and (currentHand.getSize() == 2) and (currentHand.getDoubledDown() == false) then
-			Screen.debugPrint(5,65, "Y to surrender", white, BOTTOM_SCREEN)
-			if (buttonPressed(KEY_Y)) then
+			-- Screen.debugPrint(5,65, "Y to surrender", white, BOTTOM_SCREEN)
+			if (menuResponse == 'surrender') or buttonPressed(KEY_Y) then
 				currentHand.setResult('Surrendered')
 				nextState = 'dealerTurn'
 			end
+		else
+			Screen.fillRect(109,210, 155, 215, background, BOTTOM_SCREEN )
 		end
 
 	elseif (currentState == 'dealerTurn') then
+
 		Screen.debugPrint(5,5, "Cash: $"..(playerMoney - moneyWagered()), white, BOTTOM_SCREEN)
 		renderDealerPlayerLine()
 		dealerHandValue = dealerHand.getValue()
@@ -448,15 +653,17 @@ while true do
 		else
 			if (dealerAnimationCounter > 10) then
 				dealerAnimationCounter = 0
-				for key, value in pairs(playerHands) do
-					if (playerHasInsurance == true) then
-						if (dealerHand.handStatus() == 'blackjack') then
-							playerMoney = playerMoney + value.getBet() -- to cancel out the bet that will be removed
-							value.setResult("Insured")
-						else
-							playerMoney = playerMoney - (playerBet / 2.0)
-						end
+
+				if (playerHasInsurance == true) then
+					if (dealerHand.handStatus() == 'blackjack') then
+						playerMoney = playerMoney + value.getBet() -- to cancel out the bet that will be removed
+						value.setResult("Insured")
+					else
+						playerMoney = playerMoney - (playerBet / 2.0)
 					end
+				end
+
+				for key, value in pairs(playerHands) do
 
 					playerHandValue = value.getValue()
 					dealerHandValue = dealerHand.getValue()
@@ -508,19 +715,22 @@ while true do
 				end
 
 				playerMoney = math.floor(playerMoney)
-				nextState = 'handTerm'
+
+				if (playerMoney >= playerBet) then
+					nextState = 'menu'
+					moneyWriten = false
+
+				else
+					nextState = 'gameOver'
+					moneyWriten = false
+				end
 			end
 
 		end
 
+	elseif currentState == 'gameOver' then
+		Screen.debugPrint(5,5, "Game Over", white, BOTTOM_SCREEN)
 
-		
-	elseif (currentState == 'handTerm') then
-		if (playerMoney > oldPlayerMoney) then
-			Screen.debugPrint(5,5, "Cash: $"..playerMoney.." (+"..(playerMoney - oldPlayerMoney)..")", white, BOTTOM_SCREEN)
-		else
-			Screen.debugPrint(5,5, "Cash: $"..playerMoney.." ("..(playerMoney - oldPlayerMoney)..")", white, BOTTOM_SCREEN)
-		end
 		-- Screen.debugPrint(5,25, table.concat(roundResults), white, BOTTOM_SCREEN)
 		renderDealerPlayerLine()
 		dealerHandValue = dealerHand.getValue()
@@ -531,20 +741,18 @@ while true do
 			playerHandRenderer(13+(200*(key-1)), 138, value)
 		end
 
+		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
 
-		Screen.debugPrint(5,25, "A to continue", white, BOTTOM_SCREEN)
-		if (buttonPressed(KEY_A)) then
+		if (menuResponse == 'restart') or (buttonPressed(KEY_X)) then
+			playerMoney = 1000
+			dealerHand = nil -- will reset the menu
 			nextState = 'menu'
 		end
 	end
 	
-	if (Controls.check(pad,KEY_START)) then
-		Sound.term()
-		System.exit()
-	end
-	
 	playerMoney = math.floor(playerMoney)
 	oldPad = pad
+	oldX, oldY = xTouch, yTouch
 	currentState = nextState
 	Screen.flip()
 end
