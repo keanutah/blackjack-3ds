@@ -1,8 +1,20 @@
+--[[ TODO
+	Betting																			Done
+	title                                                Done
+	Background music support										Done
+	Sound effects 															Done
+	Options (toggle BGM, toggle SFX, infinite deck, skip insurance)			Done without persistance
+	Add license
+	Upgrade LPP to v3												Done
+	SMDH														Done
+--]]
+
 white = Color.new(255,255,255)
 black = Color.new(0,0,0)
 background = Color.new(7,99,36)
 buttonFill = Color.new(9,86,32)
 buttonText = Color.new(200,200,200)
+buttonFillPressed = Color.new(47,117,66)
 
 Screen.waitVblankStart()
 Screen.refresh()
@@ -18,16 +30,24 @@ oldX, oldY = Controls.readTouch()
 
 cardSprites = Screen.loadImage(System.currentDirectory().."/images/cardsprites.png")
 cardSpritesDim = Screen.loadImage(System.currentDirectory().."/images/cardspritesdim.png")
-cardBack = Screen.loadImage(System.currentDirectory().."/images/cardback.png")
+cardBack = Screen.loadImage(System.currentDirectory().."/images/cardbackblue.png")
 
 aButton = Screen.loadImage(System.currentDirectory().."/images/a.png")
 bButton = Screen.loadImage(System.currentDirectory().."/images/b.png")
 xButton = Screen.loadImage(System.currentDirectory().."/images/x.png")
 yButton = Screen.loadImage(System.currentDirectory().."/images/y.png")
+lButton = Screen.loadImage(System.currentDirectory().."/images/l.png")
 rButton = Screen.loadImage(System.currentDirectory().."/images/r.png")
 startButton = Screen.loadImage(System.currentDirectory().."/images/start.png")
+title = Screen.loadImage(System.currentDirectory().."/images/title.png")
 
--- bgm = Sound.openOgg((System.currentDirectory().."/sound/bgm.ogg"), false)
+if System.doesFileExist(System.currentDirectory().."/sound/bgm.ogg") then
+	bgm = Sound.openOgg(System.currentDirectory().."/sound/bgm.ogg", false)
+else
+	bgm = nil
+end
+dealCardSFX = Sound.openWav(System.currentDirectory().."/sound/dealcard.wav", false)
+flipCardSFX = Sound.openWav(System.currentDirectory().."/sound/flipcard.wav", false)
 
 suiteYIndices = { s=0, c=98, h=196, d=294 }
 suiteXIndices = { ['A']=0, [2]=73, [3]=(73*2), [4]=(73*3), [5]=(73*4), [6]=(73*5), [7]=(73*6), [8]=(73*7), [9]=(73*8), [10]=(73*9), ['J']=(73*10), ['Q']=(73*11), ['K']=(73*12) }
@@ -44,6 +64,10 @@ playerBet = 100
 playerHasInsurance = false
 roundResults = {}
 
+betIncrement = 10
+minBet = 10
+maxBet = 1000
+
 currentState = 'menu'
 nextState = 'menu'
 
@@ -51,7 +75,14 @@ dealerAnimationCounter = 0
 
 fullLengthCardSpacing = 75
 singleHandCollapseCardSpacing = 35
-splitHandCardSpacing = 20
+splitHandCardSpacing = 15
+
+bgmEnabled = true
+sfxEnabled = true
+infiniteDeck = false
+offerInsurance = true
+
+bgmStarted = false
 
 
 --- Basic Functions --------------------------------------------------------------------------
@@ -146,7 +177,9 @@ end
 function addCardToHand (hand)
 	local index = math.random(1, getTableSize(deck))
 	table.insert(hand, deck[index])
-	table.remove(deck, index)
+	if not infiniteDeck then
+		table.remove(deck, index)
+	end
 	return hand
 end
 
@@ -202,12 +235,34 @@ end
 function menuTrigger (x, y, x1, x2, y1, y2, returnString) 
 	if withinCoords(x, y, x1, x2, y1, y2) and not _G[returnString..'Trigger'] then
 		_G[returnString..'Trigger'] = true
-	end
-	if not withinCoords(x, y, x1, x2, y1, y2) and _G[returnString..'Trigger'] then
+	elseif x == 0 and y == 0 and _G[returnString..'Trigger'] then
 		_G[returnString..'Trigger'] = false
+		return returnString
+	elseif not withinCoords(x, y, x1, x2, y1, y2) then
+		_G[returnString..'Trigger'] = false
+	end
+	return false
+end
+
+function instantMenuTrigger (x, y, x1, x2, y1, y2, returnString) 
+	if withinCoords(x, y, x1, x2, y1, y2) then
 		return returnString
 	end
 	return false
+end
+
+function buttonColor (x, y, x1, x2, y1, y2)
+	if withinCoords(x, y, x1, x2, y1, y2) then
+		return buttonFillPressed
+	else
+		return buttonFill
+	end
+end
+
+function playSFX (effect)
+	if sfxEnabled then
+		Sound.play(_G[effect..'SFX'],NO_LOOP,0x0A)
+	end
 end
 
 
@@ -286,21 +341,21 @@ end
 
 function drawAndCheckMenu ()
 	if currentState == 'menu' then
-		Screen.fillRect(5,314, 25, 85, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 25, 85, buttonColor(xTouch, yTouch, 5, 314, 25, 85), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
 		Screen.debugPrint(118,50, "New Hand", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'newHand') or trigger
 		if trigger then return trigger end
 
-		Screen.fillRect(5,314, 90, 150, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 90, 150, buttonColor(xTouch, yTouch, 5, 314, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,93, xButton, BOTTOM_SCREEN)
 		Screen.debugPrint(128,115, "Options", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'options') or trigger
 		if trigger then return trigger end
 
-		Screen.fillRect(5,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, startButton, BOTTOM_SCREEN)
 		Screen.debugPrint(142,180, "Exit", buttonText, BOTTOM_SCREEN)
@@ -308,22 +363,172 @@ function drawAndCheckMenu ()
 		if trigger then return trigger end
 
 	elseif currentState == 'options' then
-		Screen.fillRect(5,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
+
+		--- Deck ----
+		if not infinteDeck then
+			Screen.fillRect(10,160, 30, 50, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(15,35, "Single Deck", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(15,35, "Single Deck", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(10,160, 30, 50, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'singleDeck') or trigger
+		-- if trigger then return trigger end
+
+		if infinteDeck then
+			Screen.fillRect(160,309, 30, 50, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(165,35, "Infinite Deck", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(165,35, "Infinite Deck", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(160,309, 30, 50, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'infinteDeck') or trigger
+		-- if trigger then return trigger end
+
+
+		--- Insurance ---
+		if offerInsurance then
+			Screen.fillRect(10,160, 55, 75, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(15,60, "Insurance", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(15,60, "Insurance", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(10,160, 55, 75, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
+		-- if trigger then return trigger end
+
+		if not offerInsurance then
+			Screen.fillRect(160,309, 55, 75, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(165,60, "No Insurance", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(165,60, "No Insurance", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(160,309, 55, 75, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
+		-- if trigger then return trigger end
+
+
+		--- BGM ----
+		if bgmEnabled then
+			Screen.fillRect(10,160, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(15,85, "BGM On", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(15,85, "BGM On", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(10,160, 80, 100, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
+		-- if trigger then return trigger end
+
+		if not bgmEnabled then
+			Screen.fillRect(160, 309, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(165,85, "BGM Off", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(165,85, "BGM Off", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(160, 309, 80, 100, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
+		-- if trigger then return trigger end
+
+
+		--- SFX -----
+		if sfxEnabled then
+			Screen.fillRect(10,160, 105, 125, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(15,110, "SFX On", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(15,110, "SFX On", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(10,160, 105, 125, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
+		-- if trigger then return trigger end
+
+		if not sfxEnabled then
+			Screen.fillRect(160,309, 105, 125, buttonFillPressed, BOTTOM_SCREEN )
+			Screen.debugPrint(165,110, "SFX Off", white, BOTTOM_SCREEN)
+		else
+			Screen.debugPrint(165,110, "SFX Off", buttonText, BOTTOM_SCREEN)
+		end
+		Screen.fillEmptyRect(160,309, 105, 125, black, BOTTOM_SCREEN )
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
+		-- if trigger then return trigger end
+
+		--- Deck Style ----
+		Screen.debugPrint(10,133, "Deck Style: Next Release :)", buttonText, BOTTOM_SCREEN)
+
+
+		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, bButton, BOTTOM_SCREEN)
 		Screen.debugPrint(142,180, "Back", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 		if trigger then return trigger end
 
-	elseif currentState == 'offerInsurance' then
-		Screen.fillRect(5,314, 25, 85, buttonFill, BOTTOM_SCREEN )
-		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
+		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'singleDeck') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'infinteDeck') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
+		if trigger then return trigger end
+
+	elseif currentState == 'playerBet' then
+		Screen.fillRect(5,210, 25, 85, buttonColor(xTouch, yTouch, 5, 210, 25, 85), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,210, 25, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
+		Screen.debugPrint(65,50, "Bet $"..playerBet, buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 210, 25, 85, 'bet') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(214,314, 25, 55, buttonColor(xTouch, yTouch, 214, 314, 25, 55), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(214,314, 25, 55, black, BOTTOM_SCREEN )
+		Screen.drawImage(217,28, rButton, BOTTOM_SCREEN)
+		Screen.debugPrint(258,35, "+", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 25, 55, 'plus') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(214,314, 55, 85, buttonColor(xTouch, yTouch, 214, 314, 55, 85), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(214,314, 55, 85, black, BOTTOM_SCREEN )
+		Screen.drawImage(217,58, lButton, BOTTOM_SCREEN)
+		Screen.debugPrint(258,65, "-", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 55, 85, 'minus') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(5,105, 90, 150, buttonColor(xTouch, yTouch, 5, 105, 90, 150), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,105, 90, 150, black, BOTTOM_SCREEN )
+		Screen.debugPrint(35,115, "$50", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 105, 90, 150, 'bet50') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(109,210, 90, 150, buttonColor(xTouch, yTouch, 109, 210, 90, 150), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(109,210, 90, 150, black, BOTTOM_SCREEN )
+		Screen.debugPrint(135,115, "$100", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 109, 210, 90, 150, 'bet100') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(214,314, 90, 150, buttonColor(xTouch, yTouch, 214, 314, 90, 150), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(214,314, 90, 150, black, BOTTOM_SCREEN )
+		Screen.debugPrint(238,115, "$500", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 90, 150, 'bet500') or trigger
+		if trigger then return trigger end
+
+		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,158, bButton, BOTTOM_SCREEN)
+		Screen.debugPrint(139,180, "Back", buttonText, BOTTOM_SCREEN)
+		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
+		if trigger then return trigger end
+
+	elseif currentState == 'offerInsurance' then
+		Screen.fillRect(5,314, 25, 85, buttonColor(xTouch, yTouch, 5, 314, 25, 85), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,28, bButton, BOTTOM_SCREEN)
 		Screen.debugPrint(80,50, "Decline Insurance", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'skipInsurance') or trigger
 		if trigger then return trigger end
 
-		Screen.fillRect(5,314, 90, 150, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 90, 150, buttonColor(xTouch, yTouch, 5, 314, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,93, xButton, BOTTOM_SCREEN)
 		Screen.debugPrint(70,115, "Buy Insurance ($"..math.floor(playerBet / 2.0)..")", buttonText, BOTTOM_SCREEN)
@@ -331,35 +536,35 @@ function drawAndCheckMenu ()
 		if trigger then return trigger end
 
 	elseif currentState == 'playerTurn' then
-		Screen.fillRect(5,314, 25, 85, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 25, 85, buttonColor(xTouch, yTouch, 5, 314, 25, 85), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
 		Screen.debugPrint(147,50, "Hit", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'hit') or trigger
 		if trigger then return trigger end
 
-		Screen.fillRect(5,314, 90, 150, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 90, 150, buttonColor(xTouch, yTouch, 5, 314, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,93, bButton, BOTTOM_SCREEN)
 		Screen.debugPrint(135,115, "Stand", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'stand') or trigger
 		if trigger then return trigger end
 
-		Screen.fillRect(5,105, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,105, 155, 215, buttonColor(xTouch, yTouch, 5, 105, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,105, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, xButton, BOTTOM_SCREEN)
 		Screen.debugPrint(27,180, "Double", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 5, 105, 155, 215, 'double') or trigger
 		if trigger then return trigger end
 
-		Screen.fillRect(109,210, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(109,210, 155, 215, buttonColor(xTouch, yTouch, 109, 210, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(109,210, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(112,158, yButton, BOTTOM_SCREEN)
 		Screen.debugPrint(114,180, "Surrender", buttonText, BOTTOM_SCREEN)
 		local trigger = menuTrigger(xTouch, yTouch, 109, 210, 155, 215, 'surrender') or trigger
 		if trigger then return trigger end
 
-		Screen.fillRect(214,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(214,314, 155, 215, buttonColor(xTouch, yTouch, 214, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(214,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(217,158, rButton, BOTTOM_SCREEN)
 		Screen.debugPrint(243,180, "Split", buttonText, BOTTOM_SCREEN)
@@ -367,7 +572,7 @@ function drawAndCheckMenu ()
 		if trigger then return trigger end
 
 	elseif currentState == 'gameOver' then
-		Screen.fillRect(5,314, 155, 215, buttonFill, BOTTOM_SCREEN )
+		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, xButton, BOTTOM_SCREEN)
 		Screen.debugPrint(100,180, "New Game", buttonText, BOTTOM_SCREEN)
@@ -384,8 +589,12 @@ end
 
 ---------------------------------------------------------------------------
 
--- Sound.init()
--- Sound.play(bgm,LOOP,0x08,0x09)
+Sound.init()
+
+if bgmEnabled then
+	Sound.play(bgm,LOOP,0x08,0x09)
+	bgmStarted = true
+end
 
 fileStream = io.open(System.currentDirectory().."/money.file",FREAD)
 fileMoney = io.read(fileStream,0,10)
@@ -409,6 +618,7 @@ deck = getFreshDeck()
 
 while true do
 	Screen.waitVblankStart()
+
 	pad = Controls.read()
 	xTouch, yTouch = Controls.readTouch()
 	Screen.refresh()
@@ -418,13 +628,13 @@ while true do
 	Screen.fillRect(0, 399, 0, 239, background, TOP_SCREEN)
 	Screen.fillRect(0, 319, 0, 239, background, BOTTOM_SCREEN)
 
+	if playerBet > playerMoney then playerBet = playerMoney end
 	menuResponse = drawAndCheckMenu()
 
-	Screen.debugPrint(150,225, "Blackjack 3DS v0.1", white, BOTTOM_SCREEN)
+	Screen.debugPrint(143,225, "Blackjack 3DS v0.2", white, BOTTOM_SCREEN)
 	-- Screen.debugPrint(5,225, "d:"..fileMoney, white, BOTTOM_SCREEN)
 	
 	if (currentState == 'menu') then
-
 		if moneyWriten == false then
 			fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
 			local size = string.len(tostring(playerMoney))
@@ -452,11 +662,12 @@ while true do
 			end
 
 		else
+			Screen.drawImage(0,0, title, TOP_SCREEN)
 			Screen.debugPrint(5,5, "Cash: $"..playerMoney, white, BOTTOM_SCREEN)
 		end
 
 
-		if ((menuResponse == 'newHand') or buttonPressed(KEY_A)) and (playerMoney >= playerBet) then
+		if ((menuResponse == 'newHand') or buttonPressed(KEY_A)) and (playerMoney >= minBet) then
 			nextState = 'playerBet'
 		end
 
@@ -465,14 +676,47 @@ while true do
 		end
 
 		if (menuResponse == 'exit') or buttonPressed(KEY_START) then
+			Sound.close(bgm)
 			Sound.term()
 			System.exit()
 		end
 		
 	elseif (currentState == 'options') then
+		if dealerHand then
+			-- Screen.debugPrint(5,25, table.concat(roundResults), white, BOTTOM_SCREEN)
+			renderDealerPlayerLine()
+			dealerHandValue = dealerHand.getValue()
+			Screen.debugPrint(10,5,"Dealer: "..dealerHandValue,white,TOP_SCREEN)
+			dealerHandRenderer(13, 17)
+			for key, value in pairs(playerHands) do
+				Screen.debugPrint(10+(200*(key-1)),126,value.getValue()..": $"..value.getBet().." ("..value.getResult()..")",white,TOP_SCREEN)
+				playerHandRenderer(13+(200*(key-1)), 138, value)
+			end
+		else
+			Screen.drawImage(0,0, title, TOP_SCREEN)
+		end
+
 		Screen.debugPrint(5,5, "Options", white, BOTTOM_SCREEN)
 
-		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
+		if (menuResponse == 'singleDeck') then infinteDeck = false end
+		if (menuResponse == 'infinteDeck') then infinteDeck = true end
+		if (menuResponse == 'insurance') then offerInsurance = true end
+		if (menuResponse == 'noInsurance') then offerInsurance = false end
+		if (menuResponse == 'bgmOn') then
+			bgmEnabled = true
+			if not bgmStarted then
+				Sound.play(bgm,LOOP,0x08,0x09)
+				bgmStarted = true
+			elseif not Sound.isPlaying(bgm) then
+				Sound.resume(bgm)
+			end
+		end
+		if (menuResponse == 'bgmOff') then
+			bgmEnabled = false
+			if bgmStarted then Sound.pause(bgm) end
+		end
+		if (menuResponse == 'sfxOn') then sfxEnabled = true end
+		if (menuResponse == 'sfxOff') then sfxEnabled = false end
 
 		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
 			nextState = 'menu'
@@ -480,8 +724,46 @@ while true do
 		
 	elseif (currentState == 'playerBet') then
 		Screen.debugPrint(5,5, "Cash: $"..playerMoney, white, BOTTOM_SCREEN)
-	  	playerBet = 100
-		nextState = 'turnStart'
+		renderDealerPlayerLine()
+
+	  	if (menuResponse == 'bet') or buttonPressed(KEY_A) then
+			nextState = 'turnStart'
+		end
+
+	  	if (menuResponse == 'plus') or buttonPressed(KEY_R) then
+	  		if (playerBet < maxBet) and ((playerBet + betIncrement) <= playerMoney) then
+	  			playerBet = playerBet + betIncrement
+	  		end
+		end
+
+	  	if (menuResponse == 'minus') or buttonPressed(KEY_L) then
+	  		if playerBet > minBet then
+	  			playerBet = playerBet - betIncrement
+	  		end
+		end
+
+		if (menuResponse == 'bet50') then
+			if playerMoney >= 50 then
+				playerBet = 50
+			end
+		end
+
+		if (menuResponse == 'bet100') then
+			if playerMoney >= 100 then
+				playerBet = 100
+			end
+		end
+
+		if (menuResponse == 'bet500') then
+			if playerMoney >= 500 then
+				playerBet = 500
+			end
+		end
+
+		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
+			dealerHand = nil
+			nextState = 'menu'
+		end
 
 	elseif (currentState == 'turnStart') then
 		Screen.debugPrint(5,5, "Cash: $"..(playerMoney - moneyWagered()), white, BOTTOM_SCREEN)
@@ -501,12 +783,15 @@ while true do
 		playerHands[1].dealCard()
 		playerHands[1].dealCard()
 
+		playSFX('dealCard')
+
 		roundResults = {}
 		
-		if (dealerHand.getCards()[1][1] == 'A') and ((playerMoney - (playerBet / 2.0)) > 0) then
+		if (dealerHand.getCards()[1][1] == 'A') and ((playerMoney - (playerBet / 2.0)) > 0) and offerInsurance then
 			nextState = 'offerInsurance'
 		elseif (playerHands[1].handStatus() == 'blackjack') then
 			nextState = 'dealerTurn'
+			playSFX('flipCard')
 		else
 			nextState = 'dealerPeek'
 		end
@@ -528,15 +813,17 @@ while true do
 			playerHasInsurance = true
 			if (playerHands[1].handStatus() == 'blackjack') then
 				nextState = 'dealerTurn'
+				playSFX('flipCard')
 			else
 				nextState = 'dealerPeek'
 			end
 		end
 
 		-- Screen.debugPrint(5,25, "A to continue", white, BOTTOM_SCREEN)
-		if (menuResponse == 'skipInsurance') or buttonPressed(KEY_A) then
+		if (menuResponse == 'skipInsurance') or buttonPressed(KEY_B) then
 			if (playerHands[1].handStatus() == 'blackjack') then
 				nextState = 'dealerTurn'
+				playSFX('flipCard')
 			else
 				nextState = 'dealerPeek'
 			end
@@ -556,6 +843,7 @@ while true do
 
 		if (dealerHand.handStatus() == 'blackjack') then
 			nextState = 'dealerTurn'
+			playSFX('flipCard')
 		else
 			nextState = 'playerTurn'
 		end
@@ -582,6 +870,7 @@ while true do
 				playerHandIndex = 2
 			else
 				nextState = 'dealerTurn'
+				playSFX('flipCard')
 			end
 		end
 		
@@ -594,21 +883,25 @@ while true do
 				playerHandIndex = 2
 			else
 				nextState = 'dealerTurn'
+				playSFX('flipCard')
 			end
 		elseif (menuResponse == 'hit') or buttonPressed(KEY_A) then
 			currentHand.dealCard()
+
+			playSFX('dealCard')
 		end
 
-		if (currentHand.getSize() == 2) and (currentHand.getDoubledDown() == false) and ((playerMoney - playerBet) > 0) then
+		if (currentHand.getSize() == 2) and (currentHand.getDoubledDown() == false) and ((playerMoney - moneyWagered() - playerBet) >= 0) then
 			-- Screen.debugPrint(5,85, "X to double down", white, BOTTOM_SCREEN)
 			if (menuResponse == 'double') or buttonPressed(KEY_X) then
 				currentHand.doubleDown()
+				playSFX('flipCard')
 			end
 		else
 			Screen.fillRect(5,105, 155, 215, background, BOTTOM_SCREEN )
 		end
 
-		if not(splitActive()) and (currentHand.canSplit() == true) and (currentHand.getDoubledDown() == false) and ((playerMoney - playerBet) > 0) then 
+		if not(splitActive()) and (currentHand.canSplit() == true) and (currentHand.getDoubledDown() == false) and ((playerMoney - moneyWagered() - playerBet) >= 0) then 
 			-- Screen.debugPrint(5,105, "R to split", white, BOTTOM_SCREEN)
 			if (menuResponse == 'split') or buttonPressed(KEY_R) then
 				local cards = playerHands[1].getCards()
@@ -616,6 +909,8 @@ while true do
 				playerHands = { newHand({cards[1]}, bet), newHand({cards[2]}, bet) }
 				playerHands[1].dealCard()
 				playerHands[2].dealCard()
+
+				playSFX('dealCard')
 			end
 		else -- hide button
 			Screen.fillRect(214,314, 155, 215, background, BOTTOM_SCREEN )
@@ -626,6 +921,7 @@ while true do
 			if (menuResponse == 'surrender') or buttonPressed(KEY_Y) then
 				currentHand.setResult('Surrendered')
 				nextState = 'dealerTurn'
+				playSFX('flipCard')
 			end
 		else
 			Screen.fillRect(109,210, 155, 215, background, BOTTOM_SCREEN )
@@ -649,6 +945,7 @@ while true do
 			if (dealerAnimationCounter > 20) then
 				dealerHand.dealCard()
 				dealerAnimationCounter = 0
+				playSFX('dealCard')
 			end
 		else
 			if (dealerAnimationCounter > 10) then
@@ -656,8 +953,8 @@ while true do
 
 				if (playerHasInsurance == true) then
 					if (dealerHand.handStatus() == 'blackjack') then
-						playerMoney = playerMoney + value.getBet() -- to cancel out the bet that will be removed
-						value.setResult("Insured")
+						playerMoney = playerMoney + playerBet -- to cancel out the bet that will be removed
+						playerHands[1].setResult("Insured")
 					else
 						playerMoney = playerMoney - (playerBet / 2.0)
 					end
@@ -716,7 +1013,7 @@ while true do
 
 				playerMoney = math.floor(playerMoney)
 
-				if (playerMoney >= playerBet) then
+				if (playerMoney >= minBet) then
 					nextState = 'menu'
 					moneyWriten = false
 
@@ -745,6 +1042,7 @@ while true do
 
 		if (menuResponse == 'restart') or (buttonPressed(KEY_X)) then
 			playerMoney = 1000
+			playerBet = 100
 			dealerHand = nil -- will reset the menu
 			nextState = 'menu'
 		end
