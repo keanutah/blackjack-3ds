@@ -287,7 +287,7 @@ function loadFiles ()
 		local fileMoney = io.read(fileStream,0,10)
 		io.close(fileStream)
 		if tonumber(fileMoney) == nil then -- money file is corrupt or some shit
-			writeMoneyFile()
+			error("money.file corrupt: "..fileMoney)
 		else
 			playerMoney = tonumber(fileMoney)
 		end
