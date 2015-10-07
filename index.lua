@@ -1,12 +1,8 @@
+-- Blackjack 3DS 0.2 ---------------------
 --[[ TODO
-	Betting																			Done
-	title                                                Done
-	Background music support										Done
-	Sound effects 															Done
-	Options (toggle BGM, toggle SFX, infinite deck, skip insurance)			Done without persistance
-	Add license
-	Upgrade LPP to v3												Done
-	SMDH														Done
+	- implement soft17 check for dealer
+	- add license
+	- persist settings
 --]]
 
 white = Color.new(255,255,255)
@@ -79,8 +75,8 @@ splitHandCardSpacing = 15
 
 bgmEnabled = true
 sfxEnabled = true
-infiniteDeck = false
 offerInsurance = true
+dealerHitsSoft17 = false
 
 bgmStarted = false
 
@@ -124,6 +120,7 @@ end
 function getHandValue (hand)
 	local sum = 0
 	local numAces = 0
+	local soft = false
 	for key, value in ipairs(hand) do
 		value = value[1]
 		if (value == 'J') or (value == 'Q') or (value == 'K') then
@@ -138,9 +135,10 @@ function getHandValue (hand)
 
 	if (numAces > 0) and (sum < 12) then
 		sum = sum + 10 -- convert an ace from 1 to 11
+		soft = true
 	end
 
-	return sum
+	return sum, soft
 end
 
 function renderHand (startX, startY, cards, spacing, spriteSheet)
@@ -177,9 +175,6 @@ end
 function addCardToHand (hand)
 	local index = math.random(1, getTableSize(deck))
 	table.insert(hand, deck[index])
-	if not infiniteDeck then
-		table.remove(deck, index)
-	end
 	return hand
 end
 
@@ -200,12 +195,22 @@ end
 function dealerCanReceiveCard ()
 	if not(playerHands[1].getResult() == 'Surrendered') then
 		if splitActive() then
-			if (dealerHand.getValue() < 17) and (playerHands[1].handStatus() == 'valid') and (playerHands[2].handStatus() == 'valid') then
-				return true
+			if (playerHands[1].handStatus() == 'valid') and (playerHands[2].handStatus() == 'valid') then
+				local value = dealerHand.getValue()
+				if value < 17 then
+					return true
+				elseif dealerHitsSoft17 and dealerHand.soft17() then
+					return true
+				end
 			end
 		else
-			if (dealerHand.getValue() < 17) and (playerHands[1].handStatus() == 'valid') then
-				return true
+			if (playerHands[1].handStatus() == 'valid') then
+				local value = dealerHand.getValue()
+				if value < 17 then
+					return true
+				elseif dealerHitsSoft17 and dealerHand.soft17() then
+					return true
+				end
 			end
 		end
 	end
@@ -321,6 +326,15 @@ function newHand (initialCards, bet)
 	local getResult = function ()
 						return self.result
 					end
+	local soft17 = function ()
+						local value = 0
+						local soft = false
+						value, soft = getValue()
+						if value == 17 and soft then
+							return true
+						end
+						return false
+					end
 
 	return {
 		getCards = getCards,
@@ -333,7 +347,8 @@ function newHand (initialCards, bet)
 		doubleDown = doubleDown,
 		getDoubledDown = getDoubledDown,
 		setResult = setResult,
-		getResult = getResult
+		getResult = getResult,
+		soft17 = soft17
 	}
 end
 
@@ -366,21 +381,21 @@ function drawAndCheckMenu ()
 		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
 
 		--- Deck ----
-		if not infinteDeck then
+		if not dealerHitsSoft17 then
 			Screen.fillRect(10,160, 30, 50, buttonFillPressed, BOTTOM_SCREEN )
-			Screen.debugPrint(15,35, "Single Deck", white, BOTTOM_SCREEN)
+			Screen.debugPrint(15,35, "Stands Soft 17", white, BOTTOM_SCREEN)
 		else
-			Screen.debugPrint(15,35, "Single Deck", buttonText, BOTTOM_SCREEN)
+			Screen.debugPrint(15,35, "Stands Soft 17", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(10,160, 30, 50, black, BOTTOM_SCREEN )
 		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'singleDeck') or trigger
 		-- if trigger then return trigger end
 
-		if infinteDeck then
+		if dealerHitsSoft17 then
 			Screen.fillRect(160,309, 30, 50, buttonFillPressed, BOTTOM_SCREEN )
-			Screen.debugPrint(165,35, "Infinite Deck", white, BOTTOM_SCREEN)
+			Screen.debugPrint(165,35, "Hits Soft 17", white, BOTTOM_SCREEN)
 		else
-			Screen.debugPrint(165,35, "Infinite Deck", buttonText, BOTTOM_SCREEN)
+			Screen.debugPrint(165,35, "Hits Soft 17", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(160,309, 30, 50, black, BOTTOM_SCREEN )
 		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'infinteDeck') or trigger
@@ -463,8 +478,8 @@ function drawAndCheckMenu ()
 		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 		if trigger then return trigger end
 
-		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'singleDeck') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'infinteDeck') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'dealerStandsSoft17') or trigger
+		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'dealerHitsSoft17') or trigger
 		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
 		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
 		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
@@ -698,8 +713,8 @@ while true do
 
 		Screen.debugPrint(5,5, "Options", white, BOTTOM_SCREEN)
 
-		if (menuResponse == 'singleDeck') then infinteDeck = false end
-		if (menuResponse == 'infinteDeck') then infinteDeck = true end
+		if (menuResponse == 'dealerStandsSoft17') then dealerHitsSoft17 = false end
+		if (menuResponse == 'dealerHitsSoft17') then  dealerHitsSoft17 = true end
 		if (menuResponse == 'insurance') then offerInsurance = true end
 		if (menuResponse == 'noInsurance') then offerInsurance = false end
 		if (menuResponse == 'bgmOn') then
@@ -770,9 +785,9 @@ while true do
 		
 		deck = getFreshDeck()
 		
-		dealerHand = newHand({})
-		dealerHand.dealCard()
-		dealerHand.dealCard()
+		dealerHand = newHand({{6,'d'},{'A','c'}})
+		-- dealerHand.dealCard()
+		-- dealerHand.dealCard()
 	
 		oldPlayerMoney = playerMoney
 		playerHasInsurance = false
