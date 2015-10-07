@@ -666,6 +666,8 @@ end
 
 ---------------------------------------------------------------------------
 
+loadFiles()
+
 Sound.init()
 
 if bgmEnabled then
@@ -673,7 +675,6 @@ if bgmEnabled then
 	bgmStarted = true
 end
 
-loadFiles()
 moneyWriten = false
 
 deck = getFreshDeck()
