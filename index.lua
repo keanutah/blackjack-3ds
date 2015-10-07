@@ -785,9 +785,9 @@ while true do
 		
 		deck = getFreshDeck()
 		
-		dealerHand = newHand({{6,'d'},{'A','c'}})
-		-- dealerHand.dealCard()
-		-- dealerHand.dealCard()
+		dealerHand = newHand({})
+		dealerHand.dealCard()
+		dealerHand.dealCard()
 	
 		oldPlayerMoney = playerMoney
 		playerHasInsurance = false
