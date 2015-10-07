@@ -1,9 +1,4 @@
 -- Blackjack 3DS 0.2 ---------------------
---[[ TODO
-	- implement soft17 check for dealer
-	- add license
-	- persist settings
---]]
 
 white = Color.new(255,255,255)
 black = Color.new(0,0,0)
@@ -269,6 +264,73 @@ function playSFX (effect)
 		Sound.play(_G[effect..'SFX'],NO_LOOP,0x0A)
 	end
 end
+
+function booleanToNumber (boolean)
+	if boolean then
+		return 1
+	else
+		return 0
+	end
+end
+
+function numberToBoolean (number)
+	if tonumber(number) > 0 then
+		return true
+	else
+		return false
+	end
+end
+
+function loadFiles ()
+	if System.doesFileExist(System.currentDirectory().."/money.file") then
+		local fileStream = io.open(System.currentDirectory().."/money.file",FREAD)
+		local fileMoney = io.read(fileStream,0,10)
+		io.close(fileStream)
+		if tonumber(fileMoney) == nil then -- money file is corrupt or some shit
+			writeMoneyFile()
+		else
+			playerMoney = tonumber(fileMoney)
+		end
+	else
+		writeMoneyFile()
+	end
+
+	if System.doesFileExist(System.currentDirectory().."/settings.file") then
+		local fileStream = io.open(System.currentDirectory().."/settings.file",FREAD)
+		local fileDealerHitsSoft17 = io.read(fileStream, 17, 1)
+		local fileOfferInsurance = io.read(fileStream, 34, 1)
+		local fileBgmEnabled = io.read(fileStream, 47, 1)
+		local fileSfxEnabled = io.read(fileStream, 60, 1)
+		io.close(fileStream)
+		dealerHitsSoft17 = numberToBoolean(fileDealerHitsSoft17)
+		offerInsurance = numberToBoolean(fileOfferInsurance)
+		bgmEnabled = numberToBoolean(fileBgmEnabled)
+		sfxEnabled = numberToBoolean(fileSfxEnabled)
+	else
+		writeSettingsFile()
+	end
+end
+
+function writeMoneyFile ()
+	local fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
+	local size = string.len(tostring(playerMoney))
+	io.write(fileStream,0,'0000000000', 10)
+	io.write(fileStream,10-size,playerMoney, size) 
+	io.close(fileStream)
+end
+
+function writeSettingsFile ()
+	local fileStream = io.open(System.currentDirectory().."/settings.file",FCREATE)
+	local dealerHitsSoft17String = 'dealerHitsSoft17:'..booleanToNumber(dealerHitsSoft17)
+	local offerInsuranceString = ' offerInsurance:'..booleanToNumber(offerInsurance)
+	local bgmEnabledString = ' bgmEnabled:'..booleanToNumber(bgmEnabled)
+	local sfxEnabledString = ' sfxEnabled:'..booleanToNumber(sfxEnabled)
+	local stringLength = string.len(dealerHitsSoft17String..offerInsuranceString..bgmEnabledString..sfxEnabledString)
+	io.write(fileStream,0,dealerHitsSoft17String..offerInsuranceString..bgmEnabledString..sfxEnabledString, stringLength)
+	io.close(fileStream)
+end
+
+
 
 
 ------------------------------------------------------------------------------------
@@ -611,20 +673,7 @@ if bgmEnabled then
 	bgmStarted = true
 end
 
-fileStream = io.open(System.currentDirectory().."/money.file",FREAD)
-fileMoney = io.read(fileStream,0,10)
-io.close(fileStream)
-
-if tonumber(fileMoney) == nil then
-	fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
-	local size = string.len(tostring(playerMoney))
-	io.write(fileStream,0,'0000000000', 10)
-	io.write(fileStream,10-size,playerMoney, size) 
-	io.close(fileStream)
-else
-	playerMoney = tonumber(fileMoney)
-end
-
+loadFiles()
 moneyWriten = false
 
 deck = getFreshDeck()
@@ -647,15 +696,11 @@ while true do
 	menuResponse = drawAndCheckMenu()
 
 	Screen.debugPrint(143,225, "Blackjack 3DS v0.2", white, BOTTOM_SCREEN)
-	-- Screen.debugPrint(5,225, "d:"..fileMoney, white, BOTTOM_SCREEN)
+	-- Screen.debugPrint(5,225, "d:"..debug, white, BOTTOM_SCREEN)
 	
 	if (currentState == 'menu') then
 		if moneyWriten == false then
-			fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
-			local size = string.len(tostring(playerMoney))
-			io.write(fileStream,0,'0000000000', 10)
-			io.write(fileStream,10-size,playerMoney, size) 
-			io.close(fileStream)
+			writeMoneyFile()
 			moneyWriten = true
 		end
 
@@ -734,6 +779,7 @@ while true do
 		if (menuResponse == 'sfxOff') then sfxEnabled = false end
 
 		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
+			writeSettingsFile()
 			nextState = 'menu'
 		end
 		
