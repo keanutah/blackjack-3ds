@@ -282,11 +282,11 @@ function numberToBoolean (number)
 end
 
 function loadFiles ()
-	if System.doesFileExist(System.currentDirectory().."/settings") then
-		local fileStream = io.open(System.currentDirectory().."/settings",FREAD)
+	if System.doesFileExist(System.currentDirectory().."/settings.file") then
+		local fileStream = io.open(System.currentDirectory().."/settings.file",FREAD)
 		io.close(fileStream)
 		fileStream = 0
-		fileStream = io.open(System.currentDirectory().."/settings",FREAD)
+		fileStream = io.open(System.currentDirectory().."/settings.file",FREAD)
 		local fileDealerHitsSoft17 = io.read(fileStream, 17, 1)
 		local fileOfferInsurance = io.read(fileStream, 34, 1)
 		local fileBgmEnabled = io.read(fileStream, 47, 1)
@@ -300,8 +300,8 @@ function loadFiles ()
 		writeSettingsFile()
 	end
 
-	if System.doesFileExist(System.currentDirectory().."/money") then
-		local fileStream = io.open(System.currentDirectory().."/money",FREAD)
+	if System.doesFileExist(System.currentDirectory().."/money.file") then
+		local fileStream = io.open(System.currentDirectory().."/money.file",FREAD)
 		-- local fileSize = io.size(fileStream)
 		-- if fileSize > 10 then
 		-- 	error("money.file size error: "..fileSize.." EXIT AND RESTART")
@@ -320,10 +320,10 @@ end
 
 function writeMoneyFile ()
 	local fileStream = nil
-	if System.doesFileExist(System.currentDirectory().."/money") then
-		fileStream = io.open(System.currentDirectory().."/money",FWRITE)
+	if System.doesFileExist(System.currentDirectory().."/money,file") then
+		fileStream = io.open(System.currentDirectory().."/money.file",FWRITE)
 	else
-		fileStream = io.open(System.currentDirectory().."/money",FCREATE)
+		fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
 	end
 	local size = string.len(tostring(playerMoney))
 	io.write(fileStream, 0, '0000000000', 10) 
@@ -333,10 +333,10 @@ end
 
 function writeSettingsFile ()
 	local fileStream = nil
-	if System.doesFileExist(System.currentDirectory().."/settings") then
-		fileStream = io.open(System.currentDirectory().."/settings",FWRITE)
+	if System.doesFileExist(System.currentDirectory().."/settings.file") then
+		fileStream = io.open(System.currentDirectory().."/settings.file",FWRITE)
 	else
-		fileStream = io.open(System.currentDirectory().."/settings",FCREATE)
+		fileStream = io.open(System.currentDirectory().."/settings.file",FCREATE)
 	end
 	local dealerHitsSoft17String = 'dealerHitsSoft17:'..booleanToNumber(dealerHitsSoft17)
 	local offerInsuranceString = ' offerInsurance:'..booleanToNumber(offerInsurance)
