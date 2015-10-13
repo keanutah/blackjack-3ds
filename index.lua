@@ -282,21 +282,11 @@ function numberToBoolean (number)
 end
 
 function loadFiles ()
-	if System.doesFileExist(System.currentDirectory().."/money.file") then
-		local fileStream = io.open(System.currentDirectory().."/money.file",FREAD)
-		local fileMoney = io.read(fileStream,0,10)
+	if System.doesFileExist(System.currentDirectory().."/settings") then
+		local fileStream = io.open(System.currentDirectory().."/settings",FREAD)
 		io.close(fileStream)
-		if tonumber(fileMoney) == nil then -- money file is corrupt or some shit
-			error("money.file corrupt: "..fileMoney)
-		else
-			playerMoney = tonumber(fileMoney)
-		end
-	else
-		writeMoneyFile()
-	end
-
-	if System.doesFileExist(System.currentDirectory().."/settings.file") then
-		local fileStream = io.open(System.currentDirectory().."/settings.file",FREAD)
+		fileStream = 0
+		fileStream = io.open(System.currentDirectory().."/settings",FREAD)
 		local fileDealerHitsSoft17 = io.read(fileStream, 17, 1)
 		local fileOfferInsurance = io.read(fileStream, 34, 1)
 		local fileBgmEnabled = io.read(fileStream, 47, 1)
@@ -309,18 +299,45 @@ function loadFiles ()
 	else
 		writeSettingsFile()
 	end
+
+	if System.doesFileExist(System.currentDirectory().."/money") then
+		local fileStream = io.open(System.currentDirectory().."/money",FREAD)
+		-- local fileSize = io.size(fileStream)
+		-- if fileSize > 10 then
+		-- 	error("money.file size error: "..fileSize.." EXIT AND RESTART")
+		-- end
+		local fileMoney = io.read(fileStream,0,10)
+		io.close(fileStream)
+		if tonumber(fileMoney, 10) == nil then -- money file is corrupt or some shit
+			error("money file corrupt: "..fileMoney.." EXIT AND RESTART")
+		else
+			playerMoney = tonumber(fileMoney, 10)
+		end
+	else
+		writeMoneyFile()
+	end
 end
 
 function writeMoneyFile ()
-	local fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
+	local fileStream = nil
+	if System.doesFileExist(System.currentDirectory().."/money") then
+		fileStream = io.open(System.currentDirectory().."/money",FWRITE)
+	else
+		fileStream = io.open(System.currentDirectory().."/money",FCREATE)
+	end
 	local size = string.len(tostring(playerMoney))
-	io.write(fileStream,0,'0000000000', 10)
-	io.write(fileStream,10-size,playerMoney, size) 
+	io.write(fileStream, 0, '0000000000', 10) 
+	io.write(fileStream, 10-size, tostring(playerMoney), size) 
 	io.close(fileStream)
 end
 
 function writeSettingsFile ()
-	local fileStream = io.open(System.currentDirectory().."/settings.file",FCREATE)
+	local fileStream = nil
+	if System.doesFileExist(System.currentDirectory().."/settings") then
+		fileStream = io.open(System.currentDirectory().."/settings",FWRITE)
+	else
+		fileStream = io.open(System.currentDirectory().."/settings",FCREATE)
+	end
 	local dealerHitsSoft17String = 'dealerHitsSoft17:'..booleanToNumber(dealerHitsSoft17)
 	local offerInsuranceString = ' offerInsurance:'..booleanToNumber(offerInsurance)
 	local bgmEnabledString = ' bgmEnabled:'..booleanToNumber(bgmEnabled)
