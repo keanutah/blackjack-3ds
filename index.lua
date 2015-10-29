@@ -12,6 +12,8 @@
 	dealer standing if one of a players split hands was a bust
 --]]
 
+System.enableSpeedup()
+
 white = Color.new(255,255,255)
 black = Color.new(0,0,0)
 background = Color.new(7,99,36)
@@ -805,6 +807,7 @@ while true do
 	end
 
 	pad = Controls.read()
+
 	xTouch, yTouch = Controls.readTouch()
 	Screen.refresh()
 	Screen.clear(TOP_SCREEN)
