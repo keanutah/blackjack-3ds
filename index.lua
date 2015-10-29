@@ -12,6 +12,8 @@
 	dealer standing if one of a players split hands was a bust
 --]]
 
+System.enableSpeedup()
+
 white = Color.new(255,255,255)
 black = Color.new(0,0,0)
 background = Color.new(7,99,36)
@@ -42,7 +44,7 @@ function fprint3D(x, y, string, color)
 	end
 end
 
-language = System.getLanguage() -- 1 for EN, 2 for FR, 5 for ES
+-- language = System.getLanguage() -- 1 for EN, 2 for FR, 5 for ES
 
 Screen.waitVblankStart()
 Screen.refresh()
@@ -71,13 +73,13 @@ titlebg = Screen.loadImage(System.currentDirectory().."/images/titlebg.png")
 titlefg = Screen.loadImage(System.currentDirectory().."/images/titlefg.png")
 
 
-if System.doesFileExist(System.currentDirectory().."/sound/bgm.ogg") then
-	bgm = Sound.openOgg(System.currentDirectory().."/sound/bgm.ogg", false)
-else
-	bgm = nil
-end
-dealCardSFX = Sound.openWav(System.currentDirectory().."/sound/dealcard.wav", false)
-flipCardSFX = Sound.openWav(System.currentDirectory().."/sound/flipcard.wav", false)
+-- if System.doesFileExist(System.currentDirectory().."/sound/bgm.ogg") then
+-- 	bgm = Sound.openOgg(System.currentDirectory().."/sound/bgm.ogg", false)
+-- else
+-- 	bgm = nil
+-- end
+-- dealCardSFX = Sound.openWav(System.currentDirectory().."/sound/dealcard.wav", false)
+-- flipCardSFX = Sound.openWav(System.currentDirectory().."/sound/flipcard.wav", false)
 
 suiteYIndices = { s=0, c=98, h=196, d=294 }
 suiteXIndices = { ['A']=0, [2]=73, [3]=(73*2), [4]=(73*3), [5]=(73*4), [6]=(73*5), [7]=(73*6), [8]=(73*7), [9]=(73*8), [10]=(73*9), ['J']=(73*10), ['Q']=(73*11), ['K']=(73*12) }
@@ -107,8 +109,8 @@ fullLengthCardSpacing = 75
 singleHandCollapseCardSpacing = 35
 splitHandCardSpacing = 15
 
-bgmEnabled = true
-sfxEnabled = true
+bgmEnabled = false
+sfxEnabled = false
 offerInsurance = true
 dealerHitsSoft17 = false
 
@@ -204,9 +206,12 @@ end
 function renderHand (startX, startY, cards, spacing, spriteSheet)
 	spriteSheet = spriteSheet or cardSprites
 	for key,value in ipairs(cards) do
-		-- drawPartialImage3D(startX + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet)
-		Screen.drawPartialImage(startX - math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, RIGHT_EYE)
-		Screen.drawPartialImage(startX + math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, LEFT_EYE)
+		if three then
+			Screen.drawPartialImage(startX - math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, RIGHT_EYE)
+			Screen.drawPartialImage(startX + math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, LEFT_EYE)
+		else
+			drawPartialImage3D(startX + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet)
+		end
 	end
 end
 
@@ -215,12 +220,15 @@ function dealerHandRenderer(startX, startY, hideCard)
 	if (dealerHand.getSize() > 5) then
 		renderHand(startX, startY, dealerHand.getCards(), singleHandCollapseCardSpacing)
 	elseif (hideCard == true) then
-		-- Screen.drawPartialImage(startX, startY, suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN)
-		-- Screen.drawImage(startX + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN )
-		Screen.drawPartialImage(startX - math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, RIGHT_EYE)
-		Screen.drawPartialImage(startX + math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, LEFT_EYE)
-		Screen.drawImage(startX + math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, LEFT_EYE )
-		Screen.drawImage(startX - math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, RIGHT_EYE )
+		if three then
+			Screen.drawPartialImage(startX - math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, RIGHT_EYE)
+			Screen.drawPartialImage(startX + math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, LEFT_EYE)
+			Screen.drawImage(startX + math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, LEFT_EYE )
+			Screen.drawImage(startX - math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, RIGHT_EYE )
+		else
+			Screen.drawPartialImage(startX, startY, suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN)
+			Screen.drawImage(startX + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN )
+		end
 	else
 		renderHand(startX, startY, dealerHand.getCards(), fullLengthCardSpacing)
 	end
@@ -340,7 +348,7 @@ end
 
 function playSFX (effect)
 	if sfxEnabled then
-		Sound.play(_G[effect..'SFX'],NO_LOOP,28,29)
+		-- Sound.play(_G[effect..'SFX'],NO_LOOP,28,29)
 	end
 end
 
@@ -368,13 +376,13 @@ function loadFiles ()
 		fileStream = io.open(System.currentDirectory().."/settings.file",FREAD)
 		local fileDealerHitsSoft17 = io.read(fileStream, 17, 1)
 		local fileOfferInsurance = io.read(fileStream, 34, 1)
-		local fileBgmEnabled = io.read(fileStream, 47, 1)
-		local fileSfxEnabled = io.read(fileStream, 60, 1)
+		-- local fileBgmEnabled = io.read(fileStream, 47, 1)
+		-- local fileSfxEnabled = io.read(fileStream, 60, 1)
 		io.close(fileStream)
 		dealerHitsSoft17 = numberToBoolean(fileDealerHitsSoft17)
 		offerInsurance = numberToBoolean(fileOfferInsurance)
-		bgmEnabled = numberToBoolean(fileBgmEnabled)
-		sfxEnabled = numberToBoolean(fileSfxEnabled)
+		-- bgmEnabled = numberToBoolean(fileBgmEnabled)
+		-- sfxEnabled = numberToBoolean(fileSfxEnabled)
 	else
 		writeSettingsFile()
 	end
@@ -590,7 +598,6 @@ function drawAndCheckMenu ()
 		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
 		-- if trigger then return trigger end
 
-
 		--- BGM ----
 		if bgmEnabled then
 			Screen.fillRect(10,160, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
@@ -602,7 +609,7 @@ function drawAndCheckMenu ()
 		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
 		-- if trigger then return trigger end
 
-		if not bgmEnabled then
+		if bgmEnabled then 	-- if not bgmEnabled then
 			Screen.fillRect(160, 309, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
 			fprint(165,85, "BGM Off", white, BOTTOM_SCREEN)
 		else
@@ -624,7 +631,7 @@ function drawAndCheckMenu ()
 		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
 		-- if trigger then return trigger end
 
-		if not sfxEnabled then
+		if sfxEnabled then -- if not sfxEnabled then
 			Screen.fillRect(160,309, 105, 125, buttonFillPressed, BOTTOM_SCREEN )
 			fprint(165,110, "SFX Off", white, BOTTOM_SCREEN)
 		else
@@ -635,7 +642,7 @@ function drawAndCheckMenu ()
 		-- if trigger then return trigger end
 
 		--- Deck Style ----
-		fprint(10,133, "Deck Style: Next Release :)", buttonText, BOTTOM_SCREEN)
+		fprint(10,133, "More Soon :)", buttonText, BOTTOM_SCREEN)
 
 
 		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
@@ -649,10 +656,10 @@ function drawAndCheckMenu ()
 		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'dealerHitsSoft17') or trigger
 		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
 		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
+		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
 		if trigger then return trigger end
 
 	elseif currentState == 'playerBet' then
@@ -771,12 +778,12 @@ end
 
 loadFiles()
 
-Sound.init()
+-- Sound.init()
 
-if bgmEnabled then
-	Sound.play(bgm,LOOP,25,26)
-	bgmStarted = true
-end
+-- if bgmEnabled then
+-- 	Sound.play(bgm,LOOP,25,26)
+-- 	bgmStarted = true
+-- end
 
 moneyWriten = false
 
@@ -800,6 +807,7 @@ while true do
 	end
 
 	pad = Controls.read()
+
 	xTouch, yTouch = Controls.readTouch()
 	Screen.refresh()
 	Screen.clear(TOP_SCREEN)
@@ -811,7 +819,7 @@ while true do
 	if playerBet > playerMoney then playerBet = playerMoney end
 	menuResponse = drawAndCheckMenu()
 
-	fprint(138,225, "Blackjack 3DS v0.2.1", white, BOTTOM_SCREEN)
+	fprint(129,225, "Blackjack 3DS v0.2.5", white, BOTTOM_SCREEN)
 	-- fprint(5,225, "d:"..debug, white, BOTTOM_SCREEN)
 	
 	if (currentState == 'menu') then
@@ -855,9 +863,9 @@ while true do
 		end
 
 		if (menuResponse == 'exit') or buttonPressed(KEY_START) then
-			Sound.pause(bgm)
-			Sound.close(bgm)
-			Sound.term()
+			-- Sound.pause(bgm)
+			-- Sound.close(bgm)
+			-- Sound.term()
 			System.exit()
 		end
 		
@@ -882,21 +890,21 @@ while true do
 		if (menuResponse == 'dealerHitsSoft17') then  dealerHitsSoft17 = true end
 		if (menuResponse == 'insurance') then offerInsurance = true end
 		if (menuResponse == 'noInsurance') then offerInsurance = false end
-		if (menuResponse == 'bgmOn') then
-			bgmEnabled = true
-			if not bgmStarted then
-				Sound.play(bgm,LOOP,0x08,0x09)
-				bgmStarted = true
-			elseif not Sound.isPlaying(bgm) then
-				Sound.resume(bgm)
-			end
-		end
-		if (menuResponse == 'bgmOff') then
-			bgmEnabled = false
-			if bgmStarted then Sound.pause(bgm) end
-		end
-		if (menuResponse == 'sfxOn') then sfxEnabled = true end
-		if (menuResponse == 'sfxOff') then sfxEnabled = false end
+		-- if (menuResponse == 'bgmOn') then
+		-- 	bgmEnabled = true
+		-- 	if not bgmStarted then
+		-- 		Sound.play(bgm,LOOP,0x08,0x09)
+		-- 		bgmStarted = true
+		-- 	elseif not Sound.isPlaying(bgm) then
+		-- 		Sound.resume(bgm)
+		-- 	end
+		-- end
+		-- if (menuResponse == 'bgmOff') then
+		-- 	bgmEnabled = false
+		-- 	if bgmStarted then Sound.pause(bgm) end
+		-- end
+		-- if (menuResponse == 'sfxOn') then sfxEnabled = true end
+		-- if (menuResponse == 'sfxOff') then sfxEnabled = false end
 
 		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
 			writeSettingsFile()
