@@ -12,7 +12,7 @@
 	statistics
 --]]
 
-System.enableSpeedup()
+System.setCpuSpeed(NEW_3DS_CLOCK)
 
 debug = ''
 
