@@ -399,13 +399,13 @@ function loadFiles ()
 		fileStream = io.open(System.currentDirectory().."/settings.file",FREAD)
 		local fileDealerHitsSoft17 = io.read(fileStream, 17, 1)
 		local fileOfferInsurance = io.read(fileStream, 34, 1)
-		local fileBgmEnabled = io.read(fileStream, 47, 1)
-		local fileSfxEnabled = io.read(fileStream, 60, 1)
+		-- local fileBgmEnabled = io.read(fileStream, 47, 1)
+		-- local fileSfxEnabled = io.read(fileStream, 60, 1)
 		io.close(fileStream)
 		dealerHitsSoft17 = numberToBoolean(fileDealerHitsSoft17)
 		offerInsurance = numberToBoolean(fileOfferInsurance)
-		bgmEnabled = numberToBoolean(fileBgmEnabled)
-		sfxEnabled = numberToBoolean(fileSfxEnabled)
+		-- bgmEnabled = numberToBoolean(fileBgmEnabled)
+		-- sfxEnabled = numberToBoolean(fileSfxEnabled)
 	else
 		writeSettingsFile()
 	end
@@ -696,7 +696,6 @@ function drawAndCheckMenu ()
 		Screen.fillEmptyRect(160,309, 55, 75, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
 
-
 		--- BGM ----
 		if bgmEnabled then
 			Screen.fillRect(10,160, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
@@ -740,7 +739,6 @@ function drawAndCheckMenu ()
 		Screen.fillRect(15, 304, 85, 120, buttonFillPressedHalfOpacity, BOTTOM_SCREEN )
 		Screen.fillEmptyRect(15, 304, 85, 120, black, BOTTOM_SCREEN )
 		fprint(80, 98, "BGM/SFX Disabled", buttonText, BOTTOM_SCREEN)
-
 		--- Deck Style ----
 		fprint(10,133, "More options someday :)", buttonText, BOTTOM_SCREEN)
 
