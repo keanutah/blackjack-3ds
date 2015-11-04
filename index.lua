@@ -2,15 +2,19 @@
 
 --[[
 	TODO:
-	3d support - DONE
 	language support
-	fix flashing touch menus
-	fix bgm bug
-	post game stats?
 
-	Bugs Fixed:
-	dealer standing if one of a players split hands was a bust
+	Changes this release:
+	fixed flashing touch menus
+	clean up commented out code
+	fixed insurance offering when you can't afford it
+	write to money file on gameover screen
+	statistics
 --]]
+
+System.enableSpeedup()
+
+debug = ''
 
 white = Color.new(255,255,255)
 black = Color.new(0,0,0)
@@ -18,6 +22,7 @@ background = Color.new(7,99,36)
 buttonFill = Color.new(9,86,32)
 buttonText = Color.new(200,200,200)
 buttonFillPressed = Color.new(47,117,66)
+buttonFillPressedHalfOpacity = Color.new(47,117,66,225)
 
 three = nil
 level = 0.0
@@ -41,8 +46,6 @@ function fprint3D(x, y, string, color)
 		fprint(x, y, string, color, TOP_SCREEN)
 	end
 end
-
-language = System.getLanguage() -- 1 for EN, 2 for FR, 5 for ES
 
 Screen.waitVblankStart()
 Screen.refresh()
@@ -71,13 +74,13 @@ titlebg = Screen.loadImage(System.currentDirectory().."/images/titlebg.png")
 titlefg = Screen.loadImage(System.currentDirectory().."/images/titlefg.png")
 
 
-if System.doesFileExist(System.currentDirectory().."/sound/bgm.ogg") then
-	bgm = Sound.openOgg(System.currentDirectory().."/sound/bgm.ogg", false)
-else
-	bgm = nil
-end
-dealCardSFX = Sound.openWav(System.currentDirectory().."/sound/dealcard.wav", false)
-flipCardSFX = Sound.openWav(System.currentDirectory().."/sound/flipcard.wav", false)
+-- if System.doesFileExist(System.currentDirectory().."/sound/bgm.ogg") then
+-- 	bgm = Sound.openOgg(System.currentDirectory().."/sound/bgm.ogg", false)
+-- else
+-- 	bgm = nil
+-- end
+-- dealCardSFX = Sound.openWav(System.currentDirectory().."/sound/dealcard.wav", false)
+-- flipCardSFX = Sound.openWav(System.currentDirectory().."/sound/flipcard.wav", false)
 
 suiteYIndices = { s=0, c=98, h=196, d=294 }
 suiteXIndices = { ['A']=0, [2]=73, [3]=(73*2), [4]=(73*3), [5]=(73*4), [6]=(73*5), [7]=(73*6), [8]=(73*7), [9]=(73*8), [10]=(73*9), ['J']=(73*10), ['Q']=(73*11), ['K']=(73*12) }
@@ -107,14 +110,45 @@ fullLengthCardSpacing = 75
 singleHandCollapseCardSpacing = 35
 splitHandCardSpacing = 15
 
-bgmEnabled = true
-sfxEnabled = true
+bgmEnabled = false
+sfxEnabled = false
 offerInsurance = true
 dealerHitsSoft17 = false
 
 bgmStarted = false
 
+playerStatistics = {
+	handsPlayed = 0,
+	handsWon = 0,
+	handsPushed = 0,
+	handsLost = 0,
+	handsSurrended = 0,
+	handsWonBlackjack = 0,
+	highestMoney = 1000,
+}
+	-- insuranceWon = 0,
+
+
 --- Basic Functions --------------------------------------------------------------------------
+
+function split(str, pat)
+  local t = {}
+  local fpat = "(.-)" .. pat
+  local last_end = 1
+  local s, e, cap = str:find(fpat, 1)
+  while s do
+    if s ~= 1 or cap ~= "" then
+			table.insert(t,cap)
+    end
+    last_end = e+1
+    s, e, cap = str:find(fpat, last_end)
+  end
+  if last_end <= #str then
+    cap = str:sub(last_end)
+    table.insert(t, cap)
+  end
+  return t
+end
 
 function fillRect3D(x1, x2, y1, y2, color, screen)
 	if three then
@@ -204,9 +238,12 @@ end
 function renderHand (startX, startY, cards, spacing, spriteSheet)
 	spriteSheet = spriteSheet or cardSprites
 	for key,value in ipairs(cards) do
-		-- drawPartialImage3D(startX + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet)
-		Screen.drawPartialImage(startX - math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, RIGHT_EYE)
-		Screen.drawPartialImage(startX + math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, LEFT_EYE)
+		if three then
+			Screen.drawPartialImage(startX - math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, RIGHT_EYE)
+			Screen.drawPartialImage(startX + math.ceil(level*2.0) + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet, TOP_SCREEN, LEFT_EYE)
+		else
+			drawPartialImage3D(startX + (key-1)*spacing, startY, suiteXIndices[value[1]], suiteYIndices[value[2]], 72, 97, spriteSheet)
+		end
 	end
 end
 
@@ -215,12 +252,15 @@ function dealerHandRenderer(startX, startY, hideCard)
 	if (dealerHand.getSize() > 5) then
 		renderHand(startX, startY, dealerHand.getCards(), singleHandCollapseCardSpacing)
 	elseif (hideCard == true) then
-		-- Screen.drawPartialImage(startX, startY, suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN)
-		-- Screen.drawImage(startX + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN )
-		Screen.drawPartialImage(startX - math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, RIGHT_EYE)
-		Screen.drawPartialImage(startX + math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, LEFT_EYE)
-		Screen.drawImage(startX + math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, LEFT_EYE )
-		Screen.drawImage(startX - math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, RIGHT_EYE )
+		if three then
+			Screen.drawPartialImage(startX - math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, RIGHT_EYE)
+			Screen.drawPartialImage(startX + math.ceil(level*2.0), startY,suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN, LEFT_EYE)
+			Screen.drawImage(startX + math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, LEFT_EYE )
+			Screen.drawImage(startX - math.ceil(level*2.0) + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN, RIGHT_EYE )
+		else
+			Screen.drawPartialImage(startX, startY, suiteXIndices[dealerHand.getCards()[1][1]], suiteYIndices[dealerHand.getCards()[1][2]], 72, 97, cardSprites, TOP_SCREEN)
+			Screen.drawImage(startX + fullLengthCardSpacing, startY, cardBack, TOP_SCREEN )
+		end
 	else
 		renderHand(startX, startY, dealerHand.getCards(), fullLengthCardSpacing)
 	end
@@ -256,15 +296,6 @@ function renderDealerPlayerLine ()
 		Screen.drawLine(0, 399, 120, 120, white, TOP_SCREEN, RIGHT_EYE)
 	end
 end
-
--- function renderSplitLine ()
--- 	Screen.drawLine(199, 199, 119, 239, white, TOP_SCREEN, LEFT_EYE)
--- 	Screen.drawLine(200, 200, 119, 239, white, TOP_SCREEN, LEFT_EYE)
--- 	if three then
--- 		Screen.drawLine(199, 199, 119, 239, white, TOP_SCREEN, RIGHT_EYE)
--- 		Screen.drawLine(200, 200, 119, 239, white, TOP_SCREEN, RIGHT_EYE)
--- 	end
--- end
 
 function dealerCanReceiveCard ()
 	if not(playerHands[1].getResult() == 'Surrendered') then
@@ -340,7 +371,7 @@ end
 
 function playSFX (effect)
 	if sfxEnabled then
-		Sound.play(_G[effect..'SFX'],NO_LOOP,28,29)
+		-- Sound.play(_G[effect..'SFX'],NO_LOOP,28,29)
 	end
 end
 
@@ -382,15 +413,31 @@ function loadFiles ()
 	if System.doesFileExist(System.currentDirectory().."/money.file") then
 		local fileStream = io.open(System.currentDirectory().."/money.file",FREAD)
 		local fileSize = io.size(fileStream)
-		if fileSize > 10 then
-			error("money.file size error: "..fileSize.." EXIT AND RESTART")
-		end
-		local fileMoney = io.read(fileStream,0,fileSize)
+		local fileMoney = io.read(fileStream,0,10)
+		local settingsString = io.read(fileStream,11,fileSize)
 		io.close(fileStream)
 		if tonumber(fileMoney, 10) == nil then -- money file is corrupt or some shit
 			error("money file corrupt: "..fileMoney.." EXIT AND RESTART")
 		else
 			playerMoney = tonumber(fileMoney, 10)
+			if playerMoney <= 0 then
+				playerMoney = 1000
+				resetStatistics()
+			end
+		end
+		local s = split(settingsString,':')
+		if settingsString and getTableSize(s) == 7 then
+			loadedStats = true
+			playerStatistics = {
+				handsPlayed = tonumber(s[1]:match('%d+')),
+				handsWon = tonumber(s[2]:match('%d+')),
+				handsPushed = tonumber(s[3]:match('%d+')),
+				handsLost = tonumber(s[4]:match('%d+')),
+				handsSurrended = tonumber(s[5]:match('%d+')),
+				handsWonBlackjack = tonumber(s[6]:match('%d+')),
+				highestMoney = tonumber(s[7]:match('%d+'))
+			}
+			-- insuranceWon = tonumber(s[7]:match('%d+')),
 		end
 	else
 		writeMoneyFile()
@@ -404,9 +451,11 @@ function writeMoneyFile ()
 	else
 		fileStream = io.open(System.currentDirectory().."/money.file",FCREATE)
 	end
-	local size = string.len(tostring(playerMoney))
-	io.write(fileStream, 0, '0000000000', 10) 
-	io.write(fileStream, 10-size, tostring(playerMoney), size) 
+	moneyString = string.format('%010d', playerMoney)
+	local s = playerStatistics
+	-- saveString = moneyString..':'..s['handsPlayed']..':'..s['handsWon']..':'..s['handsPushed']..':'..s['handsLost']..':'..s['handsSurrended']..':'..s['handsWonBlackjack']..':'..s['insuranceWon']..':'..s['highestMoney']
+	saveString = moneyString..':'..s['handsPlayed']..':'..s['handsWon']..':'..s['handsPushed']..':'..s['handsLost']..':'..s['handsSurrended']..':'..s['handsWonBlackjack']..':'..s['highestMoney']
+	io.write(fileStream, 0, saveString, string.len(saveString))
 	io.close(fileStream)
 end
 
@@ -421,8 +470,7 @@ function writeSettingsFile ()
 	local offerInsuranceString = ' offerInsurance:'..booleanToNumber(offerInsurance)
 	local bgmEnabledString = ' bgmEnabled:'..booleanToNumber(bgmEnabled)
 	local sfxEnabledString = ' sfxEnabled:'..booleanToNumber(sfxEnabled)
-	-- local languageString = ' langauge:'..languageString
-	local fileString = dealerHitsSoft17String..offerInsuranceString..bgmEnabledString..sfxEnabledString -- ..languageString
+	local fileString = dealerHitsSoft17String..offerInsuranceString..bgmEnabledString..sfxEnabledString
 	local stringLength = string.len(fileString)
 	io.write(fileStream,0,fileString, stringLength)
 	io.close(fileStream)
@@ -436,6 +484,28 @@ function drawTitle()
 	else
 		Screen.drawImage(2,0, titlefg, TOP_SCREEN)
 	end
+end
+
+function incrementStatistic(statisticString)
+	playerStatistics[statisticString] = playerStatistics[statisticString] + 1
+end
+
+function resetStatistics()
+	playerStatistics = {
+		handsPlayed = 0,
+		handsWon = 0,
+		handsPushed = 0,
+		handsLost = 0,
+		handsSurrended = 0,
+		handsWonBlackjack = 0,
+		highestMoney = playerMoney,
+	}
+	-- insuranceWon = 0,
+end
+
+function round(num, idp)
+  local mult = 10^(idp or 0)
+  return string.gsub(tostring(math.floor(num * mult + 0.5) / mult), "%.?0+$", "")
 end
 
 ------------------------------------------------------------------------------------
@@ -521,28 +591,68 @@ end
 
 ---------------------------------------------------------------------------
 
+function renderStats ()
+	Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
+	Screen.drawLine(159,159,30,145, white, BOTTOM_SCREEN)
+	Screen.drawLine(160,160,30,145, white, BOTTOM_SCREEN)
+
+	local spacing = 17
+	local textStart = 32
+
+	fprint(10,textStart, "Played", buttonText, BOTTOM_SCREEN)
+	fprint(170,textStart, playerStatistics['handsPlayed'], buttonText, BOTTOM_SCREEN)
+
+	fprint(10,textStart + spacing, "Won", buttonText, BOTTOM_SCREEN)
+	fprint(170,textStart + spacing, playerStatistics['handsWon'].." ("..round((playerStatistics['handsWon'] * 100.0 / playerStatistics['handsPlayed']),1).."%)", buttonText, BOTTOM_SCREEN)
+
+	fprint(10,textStart + 2*spacing, "Pushed", buttonText, BOTTOM_SCREEN)
+	fprint(170,textStart + 2*spacing, playerStatistics['handsPushed'].." ("..round((playerStatistics['handsPushed'] * 100.0 / playerStatistics['handsPlayed']),1).."%)", buttonText, BOTTOM_SCREEN)
+
+	fprint(10,textStart + 3*spacing, "Lost", buttonText, BOTTOM_SCREEN)
+	fprint(170,textStart + 3*spacing, playerStatistics['handsLost'].." ("..round((playerStatistics['handsLost'] * 100.0 / playerStatistics['handsPlayed']),1).."%)", buttonText, BOTTOM_SCREEN)
+
+	fprint(10,textStart + 4*spacing, "Surrendered", buttonText, BOTTOM_SCREEN)
+	fprint(170,textStart + 4*spacing, playerStatistics['handsSurrended'].." ("..round((playerStatistics['handsSurrended'] * 100.0 / playerStatistics['handsPlayed']),1).."%)", buttonText, BOTTOM_SCREEN)
+
+	fprint(10,textStart + 5*spacing, "Blackjacks", buttonText, BOTTOM_SCREEN)
+	fprint(170,textStart + 5*spacing, playerStatistics['handsWonBlackjack'].." ("..round((playerStatistics['handsWonBlackjack'] * 100.0 / playerStatistics['handsPlayed']),1).."%)", buttonText, BOTTOM_SCREEN)
+
+	fprint(10,textStart + 6*spacing, "Highest Money", buttonText, BOTTOM_SCREEN)
+	fprint(170,textStart + 6*spacing, "$"..playerStatistics['highestMoney'], buttonText, BOTTOM_SCREEN)
+end
+
 function drawAndCheckMenu ()
+	local trigger = nil
+
 	if currentState == 'menu' then
 		Screen.fillRect(5,314, 25, 85, buttonColor(xTouch, yTouch, 5, 314, 25, 85), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
-		fprint(118,50, "New Hand", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'newHand') or trigger
-		if trigger then return trigger end
+		fprint(119,50, "New Hand", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'newHand') or trigger
 
 		Screen.fillRect(5,314, 90, 150, buttonColor(xTouch, yTouch, 5, 314, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,93, xButton, BOTTOM_SCREEN)
-		fprint(128,115, "Options", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'options') or trigger
-		if trigger then return trigger end
+		fprint(118,115, "Statistics", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'statistics') or trigger
 
-		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
-		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.fillRect(5,210, 155, 215, buttonColor(xTouch, yTouch, 5, 210, 155, 215), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,210, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, startButton, BOTTOM_SCREEN)
-		fprint(142,180, "Exit", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'exit') or trigger
-		if trigger then return trigger end
+		fprint(100,180, "Exit", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 210, 155, 215, 'exit') or trigger
+
+		Screen.fillRect(214,314, 155, 215, buttonColor(xTouch, yTouch, 214, 314, 155, 215), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(214,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(217,158, yButton, BOTTOM_SCREEN)
+		fprint(234,180, "Options", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 214, 314, 155, 215, 'options') or trigger
+
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'newHand') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'statistics') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 210, 155, 215, 'exit') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 214, 314, 155, 215, 'options') or trigger
 
 	elseif currentState == 'options' then
 		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
@@ -555,8 +665,7 @@ function drawAndCheckMenu ()
 			fprint(15,35, "Stands Soft 17", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(10,160, 30, 50, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'singleDeck') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'singleDeck') or trigger
 
 		if dealerHitsSoft17 then
 			Screen.fillRect(160,309, 30, 50, buttonFillPressed, BOTTOM_SCREEN )
@@ -565,8 +674,7 @@ function drawAndCheckMenu ()
 			fprint(165,35, "Hits Soft 17", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(160,309, 30, 50, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'infinteDeck') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'infinteDeck') or trigger
 
 
 		--- Insurance ---
@@ -577,8 +685,7 @@ function drawAndCheckMenu ()
 			fprint(15,60, "Insurance", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(10,160, 55, 75, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
 
 		if not offerInsurance then
 			Screen.fillRect(160,309, 55, 75, buttonFillPressed, BOTTOM_SCREEN )
@@ -587,8 +694,7 @@ function drawAndCheckMenu ()
 			fprint(165,60, "No Insurance", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(160,309, 55, 75, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
 
 
 		--- BGM ----
@@ -599,18 +705,16 @@ function drawAndCheckMenu ()
 			fprint(15,85, "BGM On", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(10,160, 80, 100, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
 
-		if not bgmEnabled then
+		if bgmEnabled then 	-- if not bgmEnabled then
 			Screen.fillRect(160, 309, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
 			fprint(165,85, "BGM Off", white, BOTTOM_SCREEN)
 		else
 			fprint(165,85, "BGM Off", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(160, 309, 80, 100, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
 
 
 		--- SFX -----
@@ -621,162 +725,177 @@ function drawAndCheckMenu ()
 			fprint(15,110, "SFX On", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(10,160, 105, 125, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
 
-		if not sfxEnabled then
+		if sfxEnabled then -- if not sfxEnabled then
 			Screen.fillRect(160,309, 105, 125, buttonFillPressed, BOTTOM_SCREEN )
 			fprint(165,110, "SFX Off", white, BOTTOM_SCREEN)
 		else
 			fprint(165,110, "SFX Off", buttonText, BOTTOM_SCREEN)
 		end
 		Screen.fillEmptyRect(160,309, 105, 125, black, BOTTOM_SCREEN )
-		-- local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
-		-- if trigger then return trigger end
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
+
+		--- Disabled Box ---
+		Screen.fillRect(15, 304, 85, 120, buttonFillPressedHalfOpacity, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(15, 304, 85, 120, black, BOTTOM_SCREEN )
+		fprint(80, 98, "BGM/SFX Disabled", buttonText, BOTTOM_SCREEN)
 
 		--- Deck Style ----
-		fprint(10,133, "Deck Style: Next Release :)", buttonText, BOTTOM_SCREEN)
-
+		fprint(10,133, "More options someday :)", buttonText, BOTTOM_SCREEN)
 
 		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, bButton, BOTTOM_SCREEN)
-		fprint(142,180, "Back", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
-		if trigger then return trigger end
+		fprint(140,180, "Back", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 
-		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'dealerStandsSoft17') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'dealerHitsSoft17') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
-		local trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
-		if trigger then return trigger end
+		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'dealerStandsSoft17') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'dealerHitsSoft17') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
+		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 
 	elseif currentState == 'playerBet' then
 		Screen.fillRect(5,210, 25, 85, buttonColor(xTouch, yTouch, 5, 210, 25, 85), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,210, 25, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
 		fprint(65,50, "Bet $"..playerBet, buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 210, 25, 85, 'bet') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 210, 25, 85, 'bet') or trigger
 
 		Screen.fillRect(214,314, 25, 55, buttonColor(xTouch, yTouch, 214, 314, 25, 55), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(214,314, 25, 55, black, BOTTOM_SCREEN )
 		Screen.drawImage(217,28, rButton, BOTTOM_SCREEN)
 		fprint(258,35, "+", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 25, 55, 'plus') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 214, 314, 25, 55, 'plus') or trigger
 
 		Screen.fillRect(214,314, 55, 85, buttonColor(xTouch, yTouch, 214, 314, 55, 85), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(214,314, 55, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(217,58, lButton, BOTTOM_SCREEN)
 		fprint(258,65, "-", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 55, 85, 'minus') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 214, 314, 55, 85, 'minus') or trigger
 
 		Screen.fillRect(5,105, 90, 150, buttonColor(xTouch, yTouch, 5, 105, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,105, 90, 150, black, BOTTOM_SCREEN )
 		fprint(35,115, "$50", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 105, 90, 150, 'bet50') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 105, 90, 150, 'bet50') or trigger
 
 		Screen.fillRect(109,210, 90, 150, buttonColor(xTouch, yTouch, 109, 210, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(109,210, 90, 150, black, BOTTOM_SCREEN )
-		fprint(135,115, "$100", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 109, 210, 90, 150, 'bet100') or trigger
-		if trigger then return trigger end
+		fprint(137,115, "$100", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 109, 210, 90, 150, 'bet100') or trigger
 
 		Screen.fillRect(214,314, 90, 150, buttonColor(xTouch, yTouch, 214, 314, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(214,314, 90, 150, black, BOTTOM_SCREEN )
 		fprint(238,115, "$500", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 90, 150, 'bet500') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 214, 314, 90, 150, 'bet500') or trigger
 
 		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, bButton, BOTTOM_SCREEN)
-		fprint(139,180, "Back", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
-		if trigger then return trigger end
+		fprint(140,180, "Back", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
+
+		trigger = menuTrigger(xTouch, yTouch, 5, 210, 25, 85, 'bet') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 214, 314, 25, 55, 'plus') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 214, 314, 55, 85, 'minus') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 105, 90, 150, 'bet50') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 109, 210, 90, 150, 'bet100') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 214, 314, 90, 150, 'bet500') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 
 	elseif currentState == 'offerInsurance' then
 		Screen.fillRect(5,314, 25, 85, buttonColor(xTouch, yTouch, 5, 314, 25, 85), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,28, bButton, BOTTOM_SCREEN)
 		fprint(80,50, "Decline Insurance", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'skipInsurance') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'skipInsurance') or trigger
 
 		Screen.fillRect(5,314, 90, 150, buttonColor(xTouch, yTouch, 5, 314, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,93, xButton, BOTTOM_SCREEN)
 		fprint(70,115, "Buy Insurance ($"..math.floor(playerBet / 2.0)..")", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'buyInsurance') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'buyInsurance') or trigger
+
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'skipInsurance') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'buyInsurance') or trigger
 
 	elseif currentState == 'playerTurn' then
 		Screen.fillRect(5,314, 25, 85, buttonColor(xTouch, yTouch, 5, 314, 25, 85), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 25, 85, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,28, aButton, BOTTOM_SCREEN)
 		fprint(147,50, "Hit", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'hit') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'hit') or trigger
 
 		Screen.fillRect(5,314, 90, 150, buttonColor(xTouch, yTouch, 5, 314, 90, 150), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 90, 150, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,93, bButton, BOTTOM_SCREEN)
 		fprint(135,115, "Stand", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'stand') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'stand') or trigger
 
 		Screen.fillRect(5,105, 155, 215, buttonColor(xTouch, yTouch, 5, 105, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,105, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, xButton, BOTTOM_SCREEN)
 		fprint(27,180, "Double", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 105, 155, 215, 'double') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 105, 155, 215, 'double') or trigger
 
 		Screen.fillRect(109,210, 155, 215, buttonColor(xTouch, yTouch, 109, 210, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(109,210, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(112,158, yButton, BOTTOM_SCREEN)
 		fprint(114,180, "Surrender", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 109, 210, 155, 215, 'surrender') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 109, 210, 155, 215, 'surrender') or trigger
 
 		Screen.fillRect(214,314, 155, 215, buttonColor(xTouch, yTouch, 214, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(214,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(217,158, rButton, BOTTOM_SCREEN)
 		fprint(243,180, "Split", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 214, 314, 155, 215, 'split') or trigger
-		if trigger then return trigger end
+		-- trigger = menuTrigger(xTouch, yTouch, 214, 314, 155, 215, 'split') or trigger
+
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 25, 85, 'hit') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 90, 150, 'stand') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 5, 105, 155, 215, 'double') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 109, 210, 155, 215, 'surrender') or trigger
+		trigger = menuTrigger(xTouch, yTouch, 214, 314, 155, 215, 'split') or trigger
 
 	elseif currentState == 'gameOver' then
 		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
 		Screen.drawImage(8,158, xButton, BOTTOM_SCREEN)
-		fprint(100,180, "New Game", buttonText, BOTTOM_SCREEN)
-		local trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'restart') or trigger
-		if trigger then return trigger end
+		fprint(120,180, "New Game", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'restart') or trigger
+
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'restart') or trigger
+
+	elseif currentState == 'statistics' then
+		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
+		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
+		Screen.drawImage(8,158, bButton, BOTTOM_SCREEN)
+		fprint(140,180, "Back", buttonText, BOTTOM_SCREEN)
+		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
+
+		trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 
 	end
+
 	-- Screen.drawLine(159,159,0,239, white, BOTTOM_SCREEN)
 	-- Screen.drawLine(160,160,0,239, white, BOTTOM_SCREEN)
-	return nil
+	return trigger
 end
 
 ---------------------------------------------------------------------------
 
 loadFiles()
 
-Sound.init()
+-- Sound.init()
 
-if bgmEnabled then
-	Sound.play(bgm,LOOP,25,26)
-	bgmStarted = true
-end
+-- if bgmEnabled then
+-- 	Sound.play(bgm,LOOP,25,26)
+-- 	bgmStarted = true
+-- end
 
 moneyWriten = false
 
@@ -800,6 +919,7 @@ while true do
 	end
 
 	pad = Controls.read()
+
 	xTouch, yTouch = Controls.readTouch()
 	Screen.refresh()
 	Screen.clear(TOP_SCREEN)
@@ -811,7 +931,7 @@ while true do
 	if playerBet > playerMoney then playerBet = playerMoney end
 	menuResponse = drawAndCheckMenu()
 
-	fprint(138,225, "Blackjack 3DS v0.2.1", white, BOTTOM_SCREEN)
+	fprint(146,225, "Blackjack 3DS v0.3", white, BOTTOM_SCREEN)
 	-- fprint(5,225, "d:"..debug, white, BOTTOM_SCREEN)
 	
 	if (currentState == 'menu') then
@@ -827,14 +947,12 @@ while true do
 			else
 				fprint(5,5, "Cash: $"..playerMoney.." ("..(playerMoney - oldPlayerMoney)..")", white, BOTTOM_SCREEN)
 			end
-			-- fprint(5,25, table.concat(roundResults), white, BOTTOM_SCREEN)
+
 			renderDealerPlayerLine()
 			dealerHandValue = dealerHand.getValue()
-			-- fprint(10,5,"Dealer: "..dealerHandValue,white,TOP_SCREEN)
 			fprint3D(10,5,"Dealer: "..dealerHandValue,white)
 			dealerHandRenderer(13, 17)
 			for key, value in pairs(playerHands) do
-				-- fprint(10+(200*(key-1)),126,value.getValue()..": $"..value.getBet().." ("..value.getResult()..")",white,TOP_SCREEN)
 				fprint3D(10+(200*(key-1)),126,value.getValue()..": $"..value.getBet().." ("..value.getResult()..")",white)
 				playerHandRenderer(13+(200*(key-1)), 138, value)
 			end
@@ -850,20 +968,23 @@ while true do
 			nextState = 'playerBet'
 		end
 
-		if (menuResponse == 'options') or buttonPressed(KEY_X) then
+		if (menuResponse == 'options') or buttonPressed(KEY_Y) then
 			nextState = 'options'
 		end
 
+		if (menuResponse == 'statistics') or buttonPressed(KEY_X) then
+			nextState = 'statistics'
+		end
+
 		if (menuResponse == 'exit') or buttonPressed(KEY_START) then
-			Sound.pause(bgm)
-			Sound.close(bgm)
-			Sound.term()
+			-- Sound.pause(bgm)
+			-- Sound.close(bgm)
+			-- Sound.term()
 			System.exit()
 		end
 		
 	elseif (currentState == 'options') then
 		if dealerHand then
-			-- fprint(5,25, table.concat(roundResults), white, BOTTOM_SCREEN)
 			renderDealerPlayerLine()
 			dealerHandValue = dealerHand.getValue()
 			fprint3D(10,5,"Dealer: "..dealerHandValue,white)
@@ -882,21 +1003,21 @@ while true do
 		if (menuResponse == 'dealerHitsSoft17') then  dealerHitsSoft17 = true end
 		if (menuResponse == 'insurance') then offerInsurance = true end
 		if (menuResponse == 'noInsurance') then offerInsurance = false end
-		if (menuResponse == 'bgmOn') then
-			bgmEnabled = true
-			if not bgmStarted then
-				Sound.play(bgm,LOOP,0x08,0x09)
-				bgmStarted = true
-			elseif not Sound.isPlaying(bgm) then
-				Sound.resume(bgm)
-			end
-		end
-		if (menuResponse == 'bgmOff') then
-			bgmEnabled = false
-			if bgmStarted then Sound.pause(bgm) end
-		end
-		if (menuResponse == 'sfxOn') then sfxEnabled = true end
-		if (menuResponse == 'sfxOff') then sfxEnabled = false end
+		-- if (menuResponse == 'bgmOn') then
+		-- 	bgmEnabled = true
+		-- 	if not bgmStarted then
+		-- 		Sound.play(bgm,LOOP,0x08,0x09)
+		-- 		bgmStarted = true
+		-- 	elseif not Sound.isPlaying(bgm) then
+		-- 		Sound.resume(bgm)
+		-- 	end
+		-- end
+		-- if (menuResponse == 'bgmOff') then
+		-- 	bgmEnabled = false
+		-- 	if bgmStarted then Sound.pause(bgm) end
+		-- end
+		-- if (menuResponse == 'sfxOn') then sfxEnabled = true end
+		-- if (menuResponse == 'sfxOff') then sfxEnabled = false end
 
 		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
 			writeSettingsFile()
@@ -947,6 +1068,8 @@ while true do
 		end
 
 	elseif (currentState == 'turnStart') then
+		incrementStatistic('handsPlayed')
+
 		fprint(5,5, "Cash: $"..(playerMoney - moneyWagered()), white, BOTTOM_SCREEN)
 		
 		deck = getFreshDeck()
@@ -965,10 +1088,8 @@ while true do
 		playerHands[1].dealCard()
 
 		playSFX('dealCard')
-
-		roundResults = {}
 		
-		if (dealerHand.getCards()[1][1] == 'A') and ((playerMoney - (playerBet / 2.0)) > 0) and offerInsurance then
+		if (dealerHand.getCards()[1][1] == 'A') and ((playerMoney - moneyWagered() - (playerBet / 2.0)) > 0) and offerInsurance then
 			nextState = 'offerInsurance'
 		elseif (playerHands[1].handStatus() == 'blackjack') then
 			nextState = 'dealerTurn'
@@ -989,7 +1110,6 @@ while true do
 		fprint3D(10,126,playerHandValue..": $"..playerHands[1].getBet(),white)
 		playerHandRenderer(13, 138, playerHands[1])
 
-		-- fprint(5,45, "X to buy insurance for $"..math.floor(playerBet / 2.0), white, BOTTOM_SCREEN)
 		if (menuResponse == 'buyInsurance') or buttonPressed(KEY_X) then
 			playerHasInsurance = true
 			if (playerHands[1].handStatus() == 'blackjack') then
@@ -1000,7 +1120,6 @@ while true do
 			end
 		end
 
-		-- fprint(5,25, "A to continue", white, BOTTOM_SCREEN)
 		if (menuResponse == 'skipInsurance') or buttonPressed(KEY_B) then
 			if (playerHands[1].handStatus() == 'blackjack') then
 				nextState = 'dealerTurn'
@@ -1019,7 +1138,6 @@ while true do
 		fprint3D(10,126,playerHandValue..": $"..playerHands[1].getBet(),white)
 		playerHandRenderer(13, 138, playerHands[1])
 
-
 		if (dealerHand.handStatus() == 'blackjack') then
 			nextState = 'dealerTurn'
 			playSFX('flipCard')
@@ -1030,11 +1148,9 @@ while true do
 	elseif (currentState == 'playerTurn') then
 		fprint(5,5, "Cash: $"..(playerMoney - moneyWagered()), white, BOTTOM_SCREEN)
 		renderDealerPlayerLine()
-		-- fprint(10,5,"Dealer",white,TOP_SCREEN)
 		fprint3D(10,5,"Dealer",white)
 		dealerHandRenderer(13, 17, true)
 		for key, value in pairs(playerHands) do
-			-- fprint(10+(200*(key-1)),126,value.getValue()..": $"..value.getBet(),white,TOP_SCREEN)
 			fprint3D(10+(200*(key-1)),126,value.getValue()..": $"..value.getBet(),white)
 			if (key == playerHandIndex) and splitActive() then
 				playerHandRenderer(13+(200*(key-1)), 138, value)
@@ -1085,6 +1201,7 @@ while true do
 				playerHands[1].dealCard()
 				playerHands[2].dealCard()
 
+				incrementStatistic('handsPlayed')
 				playSFX('dealCard')
 			end
 		else -- hide button
@@ -1112,7 +1229,6 @@ while true do
 			playerHandRenderer(13+(200*(key-1)), 138, value)
 		end
 
-
 		dealerAnimationCounter = dealerAnimationCounter + 1
 		if dealerCanReceiveCard() then
 			if (dealerAnimationCounter > 20) then
@@ -1128,63 +1244,69 @@ while true do
 					if (dealerHand.handStatus() == 'blackjack') then
 						playerMoney = playerMoney + playerBet -- to cancel out the bet that will be removed
 						playerHands[1].setResult("Insured")
+						-- incrementStatistic('insuranceWon')
+						incrementStatistic('handsLost')
 					else
 						playerMoney = playerMoney - (playerBet / 2.0)
 					end
 				end
 
 				for key, value in pairs(playerHands) do
-
 					playerHandValue = value.getValue()
 					dealerHandValue = dealerHand.getValue()
 					if value.getResult() == 'Surrendered' then -- player already surrendered
-						table.insert(roundResults, 'surrendered')
 						playerMoney = playerMoney - (playerBet / 2.0)
+						incrementStatistic('handsSurrended')
+						incrementStatistic('handsLost')
 					elseif value.handStatus() == 'bust' then -- player bust
-						table.insert(roundResults, 'playerBust')
 						playerMoney = playerMoney - value.getBet()
 						value.setResult("Lost")
+						incrementStatistic('handsLost')
+
 					elseif value.handStatus() == 'blackjack' then -- player has blackjack
 						if dealerHand.handStatus() == 'blackjack' then -- dealer also has blackjack
-							table.insert(roundResults, 'push')
 							value.setResult("Push")
+							incrementStatistic('handsPushed')
 						else
-							table.insert(roundResults, 'playerBlackjack')
 							if splitActive() then
 								playerMoney = playerMoney + value.getBet()
 								value.setResult("Won")
+								incrementStatistic('handsWon')
 							else
 								playerMoney = playerMoney + value.getBet() * 1.5
 								value.setResult("Blackjack")
+								incrementStatistic('handsWon')
+								incrementStatistic('handsWonBlackjack')
 							end
 						end
 					elseif dealerHand.handStatus() == 'blackjack' then -- dealer blackjack always wins unless player has blackjack
-						table.insert(roundResults, 'dealerBlackjack')
 						playerMoney = playerMoney - value.getBet()
 						if (playerHasInsurance == false) then
 							value.setResult("Lost")
+							incrementStatistic('handsLost')
 						end
 					elseif dealerHand.handStatus() == 'bust' then -- dealer bust
-						table.insert(roundResults, 'dealerBust')
 						playerMoney = playerMoney + value.getBet()
 						value.setResult("Won")
+						incrementStatistic('handsWon')
 					elseif (dealerHandValue > playerHandValue) then -- dealer high
-						table.insert(roundResults, 'dealerHigh')
 						playerMoney = playerMoney - value.getBet()
 						value.setResult("Lost")
+						incrementStatistic('handsLost')
 					elseif (dealerHandValue < playerHandValue) then -- player high
-						table.insert(roundResults, 'playerHigh')
 						playerMoney = playerMoney + value.getBet()
 						value.setResult("Won")
+						incrementStatistic('handsWon')
 					elseif (dealerHandValue == playerHandValue) then -- push
-						table.insert(roundResults, 'push')
 						value.setResult("Push")
-					else
-						table.insert(roundResults, 'undefined?')
+						incrementStatistic('handsPushed')
 					end
 				end
 
 				playerMoney = math.floor(playerMoney)
+				if playerMoney > playerStatistics['highestMoney'] then
+					playerStatistics['highestMoney'] = playerMoney
+				end
 
 				if (playerMoney >= minBet) then
 					nextState = 'menu'
@@ -1201,7 +1323,11 @@ while true do
 	elseif currentState == 'gameOver' then
 		fprint(5,5, "Game Over", white, BOTTOM_SCREEN)
 
-		-- fprint(5,25, table.concat(roundResults), white, BOTTOM_SCREEN)
+		if not moneyWriten then
+			writeMoneyFile()
+			moneyWriten = true
+		end
+
 		renderDealerPlayerLine()
 		dealerHandValue = dealerHand.getValue()
 		fprint3D(10,5,"Dealer: "..dealerHandValue,white)
@@ -1211,12 +1337,36 @@ while true do
 			playerHandRenderer(13+(200*(key-1)), 138, value)
 		end
 
-		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
+		renderStats()
 
 		if (menuResponse == 'restart') or (buttonPressed(KEY_X)) then
 			playerMoney = 1000
+			resetStatistics()
 			playerBet = 100
 			dealerHand = nil -- will reset the menu
+			nextState = 'menu'
+		end
+
+	elseif currentState == 'statistics' then
+		if dealerHand then
+			renderDealerPlayerLine()
+			dealerHandValue = dealerHand.getValue()
+			fprint3D(10,5,"Dealer: "..dealerHandValue,white)
+			dealerHandRenderer(13, 17)
+			for key, value in pairs(playerHands) do
+				fprint3D(10+(200*(key-1)),126,value.getValue()..": $"..value.getBet().." ("..value.getResult()..")",white)
+				playerHandRenderer(13+(200*(key-1)), 138, value)
+			end
+		else
+			drawTitle()
+		end
+
+		fprint(5,5, "Statistics", white, BOTTOM_SCREEN)
+
+		renderStats()
+
+		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
+			writeSettingsFile()
 			nextState = 'menu'
 		end
 	end
