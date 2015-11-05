@@ -2,7 +2,9 @@
 
 --[[
 	TODO:
-	language support
+	hide NaN
+	bet changing with R L add hold option?
+	language support?
 
 	Changes this release:
 	fixed flashing touch menus
@@ -126,8 +128,6 @@ playerStatistics = {
 	handsWonBlackjack = 0,
 	highestMoney = 1000,
 }
-	-- insuranceWon = 0,
-
 
 --- Basic Functions --------------------------------------------------------------------------
 
@@ -437,7 +437,6 @@ function loadFiles ()
 				handsWonBlackjack = tonumber(s[6]:match('%d+')),
 				highestMoney = tonumber(s[7]:match('%d+'))
 			}
-			-- insuranceWon = tonumber(s[7]:match('%d+')),
 		end
 	else
 		writeMoneyFile()
@@ -453,8 +452,7 @@ function writeMoneyFile ()
 	end
 	moneyString = string.format('%010d', playerMoney)
 	local s = playerStatistics
-	-- saveString = moneyString..':'..s['handsPlayed']..':'..s['handsWon']..':'..s['handsPushed']..':'..s['handsLost']..':'..s['handsSurrended']..':'..s['handsWonBlackjack']..':'..s['insuranceWon']..':'..s['highestMoney']
-	saveString = moneyString..':'..s['handsPlayed']..':'..s['handsWon']..':'..s['handsPushed']..':'..s['handsLost']..':'..s['handsSurrended']..':'..s['handsWonBlackjack']..':'..s['highestMoney']
+	saveString = moneyString..':'..s['handsPlayed']..':'..s['handsWon']..':'..s['handsPushed']..':'..s['handsLost']..':'..s['handsSurrended']..':'..s['handsWonBlackjack']..':'..s['highestMoney']..'                      '
 	io.write(fileStream, 0, saveString, string.len(saveString))
 	io.close(fileStream)
 end
@@ -500,7 +498,6 @@ function resetStatistics()
 		handsWonBlackjack = 0,
 		highestMoney = playerMoney,
 	}
-	-- insuranceWon = 0,
 end
 
 function round(num, idp)
@@ -1242,7 +1239,6 @@ while true do
 					if (dealerHand.handStatus() == 'blackjack') then
 						playerMoney = playerMoney + playerBet -- to cancel out the bet that will be removed
 						playerHands[1].setResult("Insured")
-						-- incrementStatistic('insuranceWon')
 						incrementStatistic('handsLost')
 					else
 						playerMoney = playerMoney - (playerBet / 2.0)
@@ -1342,6 +1338,7 @@ while true do
 			resetStatistics()
 			playerBet = 100
 			dealerHand = nil -- will reset the menu
+			moneyWriten = false
 			nextState = 'menu'
 		end
 
@@ -1364,7 +1361,6 @@ while true do
 		renderStats()
 
 		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
-			writeSettingsFile()
 			nextState = 'menu'
 		end
 	end
