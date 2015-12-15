@@ -1,17 +1,14 @@
--- Blackjack 3DS 0.3 ---------------------
+-- Blackjack 3DS 0.4 ---------------------
 
 --[[
-	TODO:
-	hide NaN
-	bet changing with R L add hold option?
-	language support?
-
 	Changes this release:
 	fixed flashing touch menus
 	clean up commented out code
 	fixed insurance offering when you can't afford it
 	write to money file on gameover screen
 	statistics
+	bet changing with R L add hold option?
+	SOUND IS FIXED HOPEFULLY
 --]]
 
 System.setCpuSpeed(NEW_3DS_CLOCK)
@@ -75,14 +72,13 @@ startButton = Screen.loadImage(System.currentDirectory().."/images/start.png")
 titlebg = Screen.loadImage(System.currentDirectory().."/images/titlebg.png")
 titlefg = Screen.loadImage(System.currentDirectory().."/images/titlefg.png")
 
-
--- if System.doesFileExist(System.currentDirectory().."/sound/bgm.ogg") then
--- 	bgm = Sound.openOgg(System.currentDirectory().."/sound/bgm.ogg", false)
--- else
--- 	bgm = nil
--- end
--- dealCardSFX = Sound.openWav(System.currentDirectory().."/sound/dealcard.wav", false)
--- flipCardSFX = Sound.openWav(System.currentDirectory().."/sound/flipcard.wav", false)
+if System.doesFileExist(System.currentDirectory().."/sound/bgm.ogg") then
+	bgm = Sound.openOgg(System.currentDirectory().."/sound/bgm.ogg", false)
+else
+	bgm = nil
+end
+dealCardSFX = Sound.openOgg(System.currentDirectory().."/sound/dealcard.ogg", false)
+flipCardSFX = Sound.openOgg(System.currentDirectory().."/sound/flipcard.ogg", false)
 
 suiteYIndices = { s=0, c=98, h=196, d=294 }
 suiteXIndices = { ['A']=0, [2]=73, [3]=(73*2), [4]=(73*3), [5]=(73*4), [6]=(73*5), [7]=(73*6), [8]=(73*7), [9]=(73*8), [10]=(73*9), ['J']=(73*10), ['Q']=(73*11), ['K']=(73*12) }
@@ -112,8 +108,8 @@ fullLengthCardSpacing = 75
 singleHandCollapseCardSpacing = 35
 splitHandCardSpacing = 15
 
-bgmEnabled = false
-sfxEnabled = false
+bgmEnabled = true
+sfxEnabled = true
 offerInsurance = true
 dealerHitsSoft17 = false
 
@@ -371,7 +367,7 @@ end
 
 function playSFX (effect)
 	if sfxEnabled then
-		-- Sound.play(_G[effect..'SFX'],NO_LOOP,28,29)
+		Sound.play(_G[effect..'SFX'],NO_LOOP)
 	end
 end
 
@@ -399,13 +395,13 @@ function loadFiles ()
 		fileStream = io.open(System.currentDirectory().."/settings.file",FREAD)
 		local fileDealerHitsSoft17 = io.read(fileStream, 17, 1)
 		local fileOfferInsurance = io.read(fileStream, 34, 1)
-		-- local fileBgmEnabled = io.read(fileStream, 47, 1)
-		-- local fileSfxEnabled = io.read(fileStream, 60, 1)
+		local fileBgmEnabled = io.read(fileStream, 47, 1)
+		local fileSfxEnabled = io.read(fileStream, 60, 1)
 		io.close(fileStream)
 		dealerHitsSoft17 = numberToBoolean(fileDealerHitsSoft17)
 		offerInsurance = numberToBoolean(fileOfferInsurance)
-		-- bgmEnabled = numberToBoolean(fileBgmEnabled)
-		-- sfxEnabled = numberToBoolean(fileSfxEnabled)
+		bgmEnabled = numberToBoolean(fileBgmEnabled)
+		sfxEnabled = numberToBoolean(fileSfxEnabled)
 	else
 		writeSettingsFile()
 	end
@@ -654,90 +650,100 @@ function drawAndCheckMenu ()
 	elseif currentState == 'options' then
 		Screen.fillRect(5,314, 25, 150, buttonFill, BOTTOM_SCREEN )
 
+		local settingsBaseY = 30
+		local settingsSpacing = 5
+		local settingsHeight = 25
+		local settingsTextOffset = 8
+
 		--- Deck ----
+		local deckY1 = settingsBaseY
+		local deckY2 = settingsBaseY + settingsHeight
+		local deckText = deckY1 + settingsTextOffset
 		if not dealerHitsSoft17 then
-			Screen.fillRect(10,160, 30, 50, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(15,35, "Stands Soft 17", white, BOTTOM_SCREEN)
+			Screen.fillRect(10,160, deckY1, deckY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(15,deckText, "Stands Soft 17", white, BOTTOM_SCREEN)
 		else
-			fprint(15,35, "Stands Soft 17", buttonText, BOTTOM_SCREEN)
+			fprint(15,deckText, "Stands Soft 17", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(10,160, 30, 50, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(10,160, deckY1, deckY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'singleDeck') or trigger
 
 		if dealerHitsSoft17 then
-			Screen.fillRect(160,309, 30, 50, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(165,35, "Hits Soft 17", white, BOTTOM_SCREEN)
+			Screen.fillRect(160,309, deckY1, deckY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(165,deckText, "Hits Soft 17", white, BOTTOM_SCREEN)
 		else
-			fprint(165,35, "Hits Soft 17", buttonText, BOTTOM_SCREEN)
+			fprint(165,deckText, "Hits Soft 17", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(160,309, 30, 50, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(160,309, deckY1, deckY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'infinteDeck') or trigger
 
 
 		--- Insurance ---
+		local insuranceY1 = settingsBaseY + settingsHeight + settingsSpacing
+		local insuranceY2 = settingsBaseY + (settingsHeight * 2) + settingsSpacing
+		local insuranceText = insuranceY1 + settingsTextOffset
 		if offerInsurance then
-			Screen.fillRect(10,160, 55, 75, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(15,60, "Insurance", white, BOTTOM_SCREEN)
+			Screen.fillRect(10,160, insuranceY1,insuranceY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(15,insuranceText, "Insurance", white, BOTTOM_SCREEN)
 		else
-			fprint(15,60, "Insurance", buttonText, BOTTOM_SCREEN)
+			fprint(15,insuranceText, "Insurance", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(10,160, 55, 75, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(10,160, insuranceY1,insuranceY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
 
 		if not offerInsurance then
-			Screen.fillRect(160,309, 55, 75, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(165,60, "No Insurance", white, BOTTOM_SCREEN)
+			Screen.fillRect(160,309, insuranceY1,insuranceY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(165,insuranceText, "No Insurance", white, BOTTOM_SCREEN)
 		else
-			fprint(165,60, "No Insurance", buttonText, BOTTOM_SCREEN)
+			fprint(165,insuranceText, "No Insurance", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(160,309, 55, 75, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(160,309, insuranceY1,insuranceY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
 
 		--- BGM ----
+		local bgmY1 = settingsBaseY + (settingsHeight * 2) + (settingsSpacing * 2)
+		local bgmY2 = settingsBaseY + (settingsHeight * 3) + (settingsSpacing*2)
+		local bgmText = bgmY1 + settingsTextOffset
 		if bgmEnabled then
-			Screen.fillRect(10,160, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(15,85, "BGM On", white, BOTTOM_SCREEN)
+			Screen.fillRect(10,160, bgmY1, bgmY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(15,bgmText, "BGM On", white, BOTTOM_SCREEN)
 		else
-			fprint(15,85, "BGM On", buttonText, BOTTOM_SCREEN)
+			fprint(15,bgmText, "BGM On", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(10,160, 80, 100, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(10,160,  bgmY1, bgmY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
 
-		if bgmEnabled then 	-- if not bgmEnabled then
-			Screen.fillRect(160, 309, 80, 100, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(165,85, "BGM Off", white, BOTTOM_SCREEN)
+		if not bgmEnabled then
+			Screen.fillRect(160, 309, bgmY1, bgmY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(165,bgmText, "BGM Off", white, BOTTOM_SCREEN)
 		else
-			fprint(165,85, "BGM Off", buttonText, BOTTOM_SCREEN)
+			fprint(165,bgmText, "BGM Off", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(160, 309, 80, 100, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(160, 309, bgmY1, bgmY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
 
 
 		--- SFX -----
+		local sfxY1 =  settingsBaseY + (settingsHeight * 3) + (settingsSpacing * 3)
+		local sfxY2 = settingsBaseY + (settingsHeight * 4) + (settingsSpacing*3)
+		local sfxText = sfxY1 + settingsTextOffset
 		if sfxEnabled then
-			Screen.fillRect(10,160, 105, 125, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(15,110, "SFX On", white, BOTTOM_SCREEN)
+			Screen.fillRect(10,160,  sfxY1, sfxY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(15,sfxText, "SFX On", white, BOTTOM_SCREEN)
 		else
-			fprint(15,110, "SFX On", buttonText, BOTTOM_SCREEN)
+			fprint(15,sfxText, "SFX On", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(10,160, 105, 125, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(10,160,  sfxY1, sfxY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
 
-		if sfxEnabled then -- if not sfxEnabled then
-			Screen.fillRect(160,309, 105, 125, buttonFillPressed, BOTTOM_SCREEN )
-			fprint(165,110, "SFX Off", white, BOTTOM_SCREEN)
+		if not sfxEnabled then
+			Screen.fillRect(160,309,  sfxY1, sfxY2, buttonFillPressed, BOTTOM_SCREEN )
+			fprint(165,sfxText, "SFX Off", white, BOTTOM_SCREEN)
 		else
-			fprint(165,110, "SFX Off", buttonText, BOTTOM_SCREEN)
+			fprint(165,sfxText, "SFX Off", buttonText, BOTTOM_SCREEN)
 		end
-		Screen.fillEmptyRect(160,309, 105, 125, black, BOTTOM_SCREEN )
+		Screen.fillEmptyRect(160,309,  sfxY1, sfxY2, black, BOTTOM_SCREEN )
 		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
-
-		--- Disabled Box ---
-		Screen.fillRect(15, 304, 85, 120, buttonFillPressedHalfOpacity, BOTTOM_SCREEN )
-		Screen.fillEmptyRect(15, 304, 85, 120, black, BOTTOM_SCREEN )
-		fprint(80, 98, "BGM/SFX Disabled", buttonText, BOTTOM_SCREEN)
-		--- Deck Style ----
-		fprint(10,133, "More options someday :)", buttonText, BOTTOM_SCREEN)
 
 		Screen.fillRect(5,314, 155, 215, buttonColor(xTouch, yTouch, 5, 314, 155, 215), BOTTOM_SCREEN )
 		Screen.fillEmptyRect(5,314, 155, 215, black, BOTTOM_SCREEN )
@@ -745,14 +751,14 @@ function drawAndCheckMenu ()
 		fprint(140,180, "Back", buttonText, BOTTOM_SCREEN)
 		-- trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 
-		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 30, 50, 'dealerStandsSoft17') or trigger
-		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 30, 50, 'dealerHitsSoft17') or trigger
-		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 55, 75, 'insurance') or trigger
-		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 55, 75, 'noInsurance') or trigger
-		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 80, 100, 'bgmOn') or trigger
-		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 80, 100, 'bgmOff') or trigger
-		-- trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, 105, 125, 'sfxOn') or trigger
-		-- trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, 105, 125, 'sfxOff') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, deckY1, deckY2, 'dealerStandsSoft17') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, deckY1, deckY2, 'dealerHitsSoft17') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, insuranceY1, insuranceY2, 'insurance') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, insuranceY1, insuranceY2, 'noInsurance') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, bgmY1, bgmY2, 'bgmOn') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, bgmY1, bgmY2, 'bgmOff') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 10, 160, sfxY1, sfxY2, 'sfxOn') or trigger
+		trigger = instantMenuTrigger(xTouch, yTouch, 160, 309, sfxY1, sfxY2, 'sfxOff') or trigger
 		trigger = menuTrigger(xTouch, yTouch, 5, 314, 155, 215, 'backToMenu') or trigger
 
 	elseif currentState == 'playerBet' then
@@ -885,12 +891,12 @@ end
 
 loadFiles()
 
--- Sound.init()
+Sound.init()
 
--- if bgmEnabled then
--- 	Sound.play(bgm,LOOP,25,26)
--- 	bgmStarted = true
--- end
+if bgmEnabled then
+	Sound.play(bgm,LOOP)
+	bgmStarted = true
+end
 
 moneyWriten = false
 
@@ -926,7 +932,7 @@ while true do
 	if playerBet > playerMoney then playerBet = playerMoney end
 	menuResponse = drawAndCheckMenu()
 
-	fprint(146,225, "Blackjack 3DS v0.3", white, BOTTOM_SCREEN)
+	fprint(147,225, "Blackjack 3DS v0.4", white, BOTTOM_SCREEN)
 	-- fprint(5,225, "d:"..debug, white, BOTTOM_SCREEN)
 	
 	if (currentState == 'menu') then
@@ -973,8 +979,8 @@ while true do
 
 		if (menuResponse == 'exit') or buttonPressed(KEY_START) then
 			-- Sound.pause(bgm)
-			-- Sound.close(bgm)
-			-- Sound.term()
+			Sound.close(bgm)
+			Sound.term()
 			System.exit()
 		end
 		
@@ -998,21 +1004,21 @@ while true do
 		if (menuResponse == 'dealerHitsSoft17') then  dealerHitsSoft17 = true end
 		if (menuResponse == 'insurance') then offerInsurance = true end
 		if (menuResponse == 'noInsurance') then offerInsurance = false end
-		-- if (menuResponse == 'bgmOn') then
-		-- 	bgmEnabled = true
-		-- 	if not bgmStarted then
-		-- 		Sound.play(bgm,LOOP,0x08,0x09)
-		-- 		bgmStarted = true
-		-- 	elseif not Sound.isPlaying(bgm) then
-		-- 		Sound.resume(bgm)
-		-- 	end
-		-- end
-		-- if (menuResponse == 'bgmOff') then
-		-- 	bgmEnabled = false
-		-- 	if bgmStarted then Sound.pause(bgm) end
-		-- end
-		-- if (menuResponse == 'sfxOn') then sfxEnabled = true end
-		-- if (menuResponse == 'sfxOff') then sfxEnabled = false end
+		if (menuResponse == 'bgmOn') then
+			bgmEnabled = true
+			if not bgmStarted then
+				Sound.play(bgm,LOOP)
+				bgmStarted = true
+			elseif not Sound.isPlaying(bgm) then
+				Sound.resume(bgm)
+			end
+		end
+		if (menuResponse == 'bgmOff') then
+			bgmEnabled = false
+			if bgmStarted then Sound.pause(bgm) end
+		end
+		if (menuResponse == 'sfxOn') then sfxEnabled = true end
+		if (menuResponse == 'sfxOff') then sfxEnabled = false end
 
 		if (menuResponse == 'backToMenu') or (buttonPressed(KEY_B)) then
 			writeSettingsFile()
@@ -1027,13 +1033,13 @@ while true do
 			nextState = 'turnStart'
 		end
 
-	  	if (menuResponse == 'plus') or buttonPressed(KEY_R) then
+	  	if (menuResponse == 'plus') or Controls.check(pad,KEY_R) then
 	  		if (playerBet < maxBet) and ((playerBet + betIncrement) <= playerMoney) then
 	  			playerBet = playerBet + betIncrement
 	  		end
 		end
 
-	  	if (menuResponse == 'minus') or buttonPressed(KEY_L) then
+	  	if (menuResponse == 'minus') or Controls.check(pad,KEY_L) then
 	  		if playerBet > minBet then
 	  			playerBet = playerBet - betIncrement
 	  		end
